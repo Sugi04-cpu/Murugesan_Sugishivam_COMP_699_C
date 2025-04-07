@@ -104,7 +104,7 @@ def update_cart_item(cart_id, product_id, quantity, action="update"):
                 "$set": {"updated_at": now}
             }
         )
-
+    
 def get_cart_items(cart_id):
     """Get all items in cart with product details"""
     cart_collection = get_collection("carts")
