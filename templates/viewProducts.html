@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        {%load static%}
+        {% load productFilters %}
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="description" content="" />
+        <meta name="author" content="" />
+        <title>Shop Homepage</title>
+        <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
+        <link href= {% static 'css/styles.css' %} rel="stylesheet" />
+    </head>
+    <body>
+        <!-- Navigation-->
+        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+            <div class="container px-4 px-lg-5">
+                <a class="navbar-brand" href="{% url 'render_products' %}">E-Commerce Store</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
+                <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                    <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
+                        <li class="nav-item"><a class="nav-link active" aria-current="page" href="{% url 'render_products' %}">Home</a></li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" id="navbarDropdown" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">Categories</a>
+                            <ul class="dropdown-menu" aria-labelledby="navbarDropdown">
+                                <li><a class="dropdown-item {% if not selected_category %}active{% endif %}" href="{% url 'render_products' %}">All Products</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                {% for category in categories %}
+                                    <li><a class="dropdown-item {% if selected_category == category %}active{% endif %}" 
+                                          href="?category={{ category }}">{{ category }}</a></li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                    </ul>
+                    <!-- Cart button always displayed -->
+                    <div class="d-flex align-items-center">
+                        <a href="{% url 'view_cart' %}" class="btn btn-outline-dark me-2">
+                            <i class="bi-cart-fill me-1"></i>
+                            Cart
+                            <span class="badge bg-dark text-white ms-1 rounded-pill">{{ cart_count|default:0 }}</span>
+                        </a>
+                        {% if request.user_data %}
+                            <a href="{% url 'profile_view' request.user_data.user_id %}" class="btn btn-outline-dark ms-2">
+                                <i class="bi-person-fill me-1"></i>
+                                Profile
+                            </a>
+                            {% if request.user_data.role == 'admin' %}
+                                <a href="{% url 'render_users_admin' %}" class="btn btn-outline-dark ms-2">
+                                    <i class="bi-gear-fill me-1"></i>
+                                    Admin Panel
+                                </a>
+                            {% endif %}
+                            <a href="{% url 'logout_view' %}" class="btn btn-outline-danger ms-2">
+                                <i class="bi-box-arrow-right me-1"></i>
+                                Logout
+                            </a>
+                        {% else %}
+                            <a href="{% url 'login_view' %}" class="btn btn-outline-dark ms-2">
+                                <i class="bi-person-fill me-1"></i>
+                                Login
+                            </a>
+                            <a href="{% url 'sign_up' %}" class="btn btn-outline-secondary ms-2">
+                                <i class="bi-pencil-square me-1"></i>
+                                Sign Up
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </nav>
+        <div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="toast show align-items-center border-0 {% if message.tags == 'error' %}bg-danger{% elif message.tags == 'warning' %}bg-warning{% else %}bg-success{% endif %} text-white" 
+                         role="alert" 
+                         aria-live="assertive" 
+                         aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body">
+                                <i class="bi {% if message.tags == 'error' %}bi-x-circle{% elif message.tags == 'warning' %}bi-exclamation-circle{% else %}bi-check-circle{% endif %} me-2"></i>
+                                {{ message }}
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+        <!-- Header-->
+        <header class="bg-dark py-5">
+            <div class="container px-4 px-lg-5 my-5">
+                <div class="text-center text-white">
+                    <h1 class="display-4 fw-bolder">Shop in style</h1>
+                    {% if selected_category %}
+                        <p class="lead fw-normal text-white-50 mb-0">Browsing {{ selected_category }}</p>
+                    {% else %}
+                        <p class="lead fw-normal text-white-50 mb-0">All Products</p>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+
+        <!-- Section-->
+        <section class="py-5">
+            <div class="container px-4 px-lg-5 mt-5">
+                <div class="row gx-4 gx-lg-5 row-cols-2 row-cols-md-3 row-cols-xl-4 justify-content-center">
+                    {% for product in products %}
+                        <div class="col mb-5">
+                            <div class="card h-100">
+                                <!-- Product image-->
+                                {% if product.image_url %}
+                                    <img class="card-img-top" src="{{ product.image_url }}" alt="{{ product.name }}" />
+                                {% else %}
+                                    <img class="card-img-top" src="{% static 'images/placeholder.jpg' %}" alt="No image available" />
+                                {% endif %}
+                                
+                                <!-- Product details-->
+                                <div class="card-body p-4">
+                                    <div class="text-center">
+                                        <!-- Always Visible Information -->
+                                        <h5 class="fw-bolder">{{ product.name }}</h5>
+                                        <div class="text-muted mb-2">{{ product.category }}</div>
+                                        {% if product.attributes.brand %}
+                                            <div class="mb-2">
+                                                <strong>Brand:</strong> {{ product.attributes.brand }}
+                                            </div>
+                                        {% endif %}
+
+                                        {%if product.attributes.rating%}
+                                            <div class="mb-2">
+                                                <span class="text-warning">
+                                                    {% for i in ""|ljust:product.attributes.rating|make_list %}
+                                                        ★
+                                                    {% endfor %}
+                                                </span>
+                                                <small class="text-muted">({{ product.attributes.rating }})</small>
+                                            </div>
+                                        {%endif%}
+
+                                        {% if product.attributes.model %}
+                                            <div class="mb-2">
+                                                <strong>Model:</strong> {{ product.attributes.model }}
+                                            </div>
+                                        {% endif %}
+
+                                        {% if product.attributes.color %}
+                                            <div class="mb-2">
+                                                <strong>Color:</strong> {{ product.attributes.color }}
+                                            </div>
+                                        {% endif %}
+
+                                        {% if request.user_data %}
+                                            <!-- Authenticated User Content -->
+                                            {% if product.discount %}
+                                                {% with discounted_price=product.price|multiply:0.01|multiply:product.discount|subtract:product.price|abs %}
+                                                    <span class="text-decoration-line-through text-muted">${{ product.price }}</span>
+                                                    <span class="text-primary">${{ discounted_price|floatformat:2 }}</span>
+                                                {% endwith %}
+                                            {% else %}
+                                                <span class="text-primary">${{ product.price|floatformat:2 }}</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <!-- Guest User CTA -->
+                                            <div class="alert alert-info mt-3" role="alert">
+                                                <i class="bi bi-info-circle"></i>
+                                                <a href="{% url 'login_view' %}" class="alert-link">Log in</a> or 
+                                                <a href="{% url 'sign_up' %}" class="alert-link">Sign up</a> 
+                                                to view prices and make purchases
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <!-- Product actions-->
+                                <div class="card-footer p-4 pt-0 border-top-0 bg-transparent">
+                                    <div class="text-center">
+                                        <a class="btn btn-outline-dark mt-auto" href="{% url 'get_single_product' product.id %}">View Details</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="col-12 text-center">
+                            <h3 class="text-muted">No products found{% if selected_category %} in {{ selected_category }}{% endif %}</h3>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <!-- Pagination --> 
+            <div class="container px-4 px-lg-5 mt-4">
+                {% if is_paginated %}
+                <nav aria-label="Page navigation">
+                    <ul class="pagination justify-content-center">
+                        {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page=1{% if selected_category %}&category={{ selected_category }}{% endif %}" aria-label="First">
+                                    <span aria-hidden="true">&laquo;&laquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if selected_category %}&category={{ selected_category }}{% endif %}" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+                        {% endif %}
+    
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?page={{ num }}{% if selected_category %}&category={{ selected_category }}{% endif %}">{{ num }}</a>
+                                </li>
+                            {% endif %}
+                        {% endfor %}
+    
+                        {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if selected_category %}&category={{ selected_category }}{% endif %}" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if selected_category %}&category={{ selected_category }}{% endif %}" aria-label="Last">
+                                    <span aria-hidden="true">&raquo;&raquo;</span>
+                                </a>
+                            </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+    
+                <p class="text-center text-muted">
+                    Showing products {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+                </p>
+                {% endif %}
+            </div>
+        </section>
+        
+        <!-- Footer-->
+        <footer class="py-5 bg-dark">
+            <div class="container">
+                <p class="m-0 text-center text-white">Copyright &copy; Your Website {% now "Y" %}</p>
+            </div>
+        </footer>
+
+        <!-- Bootstrap core JS-->
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+        
+        {% if not request.user_data %}
+        <div class="modal fade" id="signupPromptModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Sign Up for Full Access!</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Create an account to:</p>
+                        <ul>
+                            <li>View product prices</li>
+                            <li>Access exclusive discounts</li>
+                            <li>Make purchases</li>
+                            <li>Track your orders</li>
+                        </ul>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Maybe Later</button>
+                        <a href="{% url 'sign_up' %}" class="btn btn-primary">Sign Up Now</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add this script before the closing body tag -->
+        <script>
+            setTimeout(() => {
+                const signupModal = new bootstrap.Modal(document.getElementById('signupPromptModal'));
+                signupModal.show();
+            }, 120000); // 2 minutes in milliseconds
+        </script>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                var toasts = document.querySelectorAll('.toast');
+                toasts.forEach(function(toastEl) {
+                    var toast = new bootstrap.Toast(toastEl, {
+                        autohide: true,
+                        delay: 3000
+                    });
+                    toast.show();
+                });
+            });
+        </script>
+        {% endif %}
+    </body>
+</html>
