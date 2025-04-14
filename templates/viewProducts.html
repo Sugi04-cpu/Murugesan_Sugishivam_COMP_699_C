@@ -16,7 +16,7 @@
         <!-- Navigation-->
         <nav class="navbar navbar-expand-lg navbar-light bg-light">
             <div class="container px-4 px-lg-5">
-                <a class="navbar-brand" href="{% url 'render_products' %}"> GlobalTech </a>
+                <a class="navbar-brand" href="{% url 'render_products' %}">E-Commerce Store</a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
                 <div class="collapse navbar-collapse" id="navbarSupportedContent">
                     <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
@@ -33,14 +33,6 @@
                             </ul>
                         </li>
                     </ul>
-                    <form class="d-flex" action="{% url 'render_products' %}" method="get">
-                        <div class="input-group me-5">
-                            <input class="form-control" type="search" name="query" placeholder="Search products..." value="{{query}}" aria-label="Search">
-                            <button class="btn btn-outline-success" type="submit">
-                                <i class="bi bi-search"></i> 
-                            </button>
-                        </div>
-                    </form>
                     <!-- Cart button always displayed -->
                     <div class="d-flex align-items-center">
                         <a href="{% url 'view_cart' %}" class="btn btn-outline-dark me-2">
@@ -77,7 +69,24 @@
                 </div>
             </div>
         </nav>
-        {% include "includes/messages.html"%}
+        <div class="position-fixed top-0 end-0 p-3" style="z-index: 1050">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="toast show align-items-center border-0 {% if message.tags == 'error' %}bg-danger{% elif message.tags == 'warning' %}bg-warning{% else %}bg-success{% endif %} text-white" 
+                         role="alert" 
+                         aria-live="assertive" 
+                         aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body">
+                                <i class="bi {% if message.tags == 'error' %}bi-x-circle{% elif message.tags == 'warning' %}bi-exclamation-circle{% else %}bi-check-circle{% endif %} me-2"></i>
+                                {{ message }}
+                            </div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
         <!-- Header-->
         <header class="bg-dark py-5">
             <div class="container px-4 px-lg-5 my-5">

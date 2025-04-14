@@ -16,8 +16,8 @@ Including another URLconf
 """
 from django.urls import path, include
 from django.shortcuts import redirect
-from api.users.usersApi import create_user
-from api.login.views import login_view, logout_view, sign_up, password_reset
+from api.users.usersApi import get_users, create_user
+from api.login.views import login_view, logout_view, sign_up
 
 
 
@@ -26,12 +26,11 @@ from api.login.views import login_view, logout_view, sign_up, password_reset
 urlpatterns = [
     path("", lambda request: redirect('render_products'), name='root'),
     path('products/',include('api.products.urls')),
+    path('users/', get_users),
     path("login/", login_view, name="login_view"),
     path('logout/', logout_view, name='logout_view'),
-    path('password-reset/<str:reset_token>/', password_reset, name='password_reset'),
     path('create/', create_user, name='create_user'),
     path('signup/', sign_up, name='sign_up'),
     path('profile/', include('api.users.urls')),
     path('cart/', include('api.cart_management.urls')),
-    path('checkout/', include('api.checkout.urls'))
 ]

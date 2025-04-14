@@ -24,8 +24,6 @@ TEMPLATE_DIR = os.path.join(BASE_DIR2, 'templates')
 TEMPLATETAGS_DIR = os.path.join(BASE_DIR2, 'templatetags')
 STATIC_DIR = os.path.join(BASE_DIR2, 'static')
 
-STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY')
-STRIPE_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -49,7 +47,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'api.users',
-    'api.products',
 
 ]
 
@@ -150,14 +147,3 @@ STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 DEBUG = config('DEBUG', default=False, cast=bool)
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
-EMAIL_HOST = config('EMAIL_HOST', default='smtp.gmail.com')
-EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
-EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
-EMAIL_HOST_USER = config('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')
-SITE_URL = config('SITE_URL', default='http://localhost:8000')
-ALLOWED_HOSTS = config("ALLOWED_HOSTS").split(",")
-EMAIL_VERIFICATION_TIMEOUT = config('EMAIL_VERIFICATION_TIMEOUT', default=20, cast=int)

@@ -1,30 +1,26 @@
+import logging
 import json
 from django.http import JsonResponse
 from django.shortcuts import render
-from .productsApi import product_collection
+from .productsApi import get_products, product_collection
 from django.core.paginator import Paginator 
 from ..cart_management.cart_management_db import get_user_cart, get_cart_items
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 
 
 def render_products(request):
     try:
-        # Get the search query from the request
-        query = request.GET.get("query", "").strip()
+        # Get products with category filtering
+        response = get_products(request)
 
-        # Get products with optional search filtering
-        if query:
-            # Search for products by name, category, or brand
-            products = list(product_collection.find({
-                "$or": [
-                    {"name": {"$regex": query, "$options": "i"}},
-                    {"category": {"$regex": query, "$options": "i"}},
-                    {"brand": {"$regex": query, "$options": "i"}}
-                ]
-            }))
+        if isinstance(response, JsonResponse):
+            # Decode the JSON response content
+            products = json.loads(response.content.decode('utf-8'))
         else:
-            # Get all products if no search query is provided
-            products = list(product_collection.find())
+            products = []
 
         # Get categories for the dropdown menu
         categories = list(product_collection.distinct("category"))
@@ -33,7 +29,6 @@ def render_products(request):
         for product in products:
             product['id'] = str(product.get('_id', ''))
 
-        # Handle pagination
         try:
             page_number = int(request.GET.get('page', 1))
         except ValueError:
@@ -47,28 +42,18 @@ def render_products(request):
             page_obj = paginator.page(1)
 
         cart_count = 0
-        cart = None
-
-        # Handle authenticated user
-        if hasattr(request, 'user_data') and request.user_data:
-            user_id = request.user_data.get('user_id')  
-
-            if user_id:
-                cart = get_user_cart(user_id=str(user_id))  # Ensure user_id is string
-        
-        # Handle guest user
-        if not cart:
-            if not request.session.session_key:
-                request.session.create()
-                request.session.save()  # Ensure session is saved
+        if request.user_data:
+            cart = get_user_cart(user_id=request.user_data["_id"])
+        else:
             cart = get_user_cart(session_id=request.session.session_key)
-
-        # Calculate cart count
+            
         if cart:
             cart_items = get_cart_items(cart["_id"])
+
+           
             cart_count = len(cart_items)
 
-        # Prepare context for rendering
+
         context = {
             "products": page_obj,
             "categories": categories,
@@ -79,10 +64,10 @@ def render_products(request):
             "showing_start": (page_number - 1) * 28 + 1,
             "showing_end": min(page_number * 28, len(products)),
             "cart_count": cart_count,
-            "query": query
         }
 
-        return render(request, "products/view_products.html", context)
+        return render(request, "viewProducts.html", context)
 
     except Exception as e:
+        logger.error(f"Error in render_products: {str(e)}", exc_info=True)
         return render(request, "error.html", {"error": str(e)})

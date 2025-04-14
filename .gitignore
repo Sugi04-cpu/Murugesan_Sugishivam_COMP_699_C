@@ -1,24 +1,4 @@
-# Python virtual environments
-env/
-venv/
-.venv/
-
 # Environment variables
 .env
-
-# Python cache files
-__pycache__/
-*.py[cod]
-
-# VS Code settings
-.vscode/
-
-# Database
-*.sqlite3
-
-# Static files
-static/
-media/
-
-# Log files
-*.log
+.env.local
+.env.*.local

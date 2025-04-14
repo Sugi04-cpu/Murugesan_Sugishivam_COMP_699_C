@@ -35,7 +35,7 @@
                         <div class="btn-group">
                             {% if user.id %}
                                 <!-- Edit Form -->
-                                <form method="POST" action="{% url 'edit_user' user.id %}" style="display: inline; margin-right: 5px;">
+                                <form method="POST" action="{% url 'edit_user' user.id %}" style="display: inline;">
                                     {% csrf_token %}
                                     <input type="hidden" name="_method" value="PUT">
                                     <button type="submit" class="btn btn-sm btn-primary">
