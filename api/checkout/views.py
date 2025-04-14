@@ -42,7 +42,7 @@ This link expires in {timeout} minutes.''',
 @csrf_exempt
 def checkout(request):
     try:
-        # Fetch all active coupons from the coupons collection
+        # Retrieve coupons from the database
         coupons_collection = get_collection("coupons")
         active_coupons = {
             coupon["code"]: coupon["discount_percentage"]
@@ -53,9 +53,9 @@ def checkout(request):
         session_id = request.GET.get('session_id')
         if session_id:
             checkout_session = stripe.checkout.Session.retrieve(session_id)
-            user_id = checkout_session.get("client_reference_id")
+            user_id = checkout_session.get("client_reference_id")        
 
-        user_data = getattr(request, 'user_data', None) or request.session.get('user_data') or {"user_id": user_id}
+        user_data = getattr(request,  'user_data', None) or request.session.get('user_data') or {"user_id": user_id}
 
         if not user_data:
             messages.warning(request, "Payment was cancelled. Please log in to view your cart.")
@@ -70,7 +70,7 @@ def checkout(request):
         # Get cart and process items
         cart = get_user_cart(user_id=user_data["user_id"])
         if not cart:
-            return render(request, 'order_management/checkout.html', {
+            return render(request, 'order_management/cart.html', {
                 "error": "No cart found",
                 "cart_items": [],
                 "cart_total": 0
@@ -89,7 +89,7 @@ def checkout(request):
                 }
             )
 
-            if send_verification_email(user["email"], verification_token, str(user["_id"])): 
+            if send_verification_email(user["email"], verification_token, str(user["_id"])):
                 messages.info(request, "Please verify your email to complete checkout. Verification link sent.")
             else:
                 messages.error(request, "Failed to send verification email. Please try again.")
@@ -110,7 +110,7 @@ def checkout(request):
 
             item["subtotal"] = price * quantity
             cart_total += item["subtotal"]
-
+        
         # Apply 10% discount for cart total over $100
         if cart_total > 100:
             cart_total -= cart_total * 0.1 
@@ -151,11 +151,11 @@ def checkout(request):
             "coupon_discount": round(coupon_discount, 2),
         }
 
-        return render(request, 'order_management/checkout.html', context)
+        return render(request, 'order_management/cart.html', context)
 
     except Exception as e:
         print(f"Error in checkout: {str(e)}")
-        return render(request, 'order_management/checkout.html', {"error": str(e)})
+        return render(request, 'order_management/cart.html', {"error": str(e)})
 
 @csrf_exempt
 def payment_success(request):
@@ -190,7 +190,7 @@ def payment_success(request):
             {"_id": user["_id"]},
             {"$inc": {"loyalty_points": loyalty_points}}
         )
-        
+
         # Create an order in the orders collection
         order = {
             "user_id": user["_id"],
@@ -217,7 +217,7 @@ def payment_success(request):
         cart_items_collection.delete_many({"cart_id": cart["_id"]})
 
         messages.success(request, f"Payment successful! You earned {loyalty_points} loyalty points.")
-        return render(request, 'order_management/payment_success.html', {"loyalty_points": loyalty_points})
+        return render(request, 'payment_success.html', {"loyalty_points": loyalty_points})
 
     except Exception as e:
         print(f"Error in payment_success: {str(e)}")
@@ -233,6 +233,7 @@ def payment_cancel(request):
         return redirect(f"/checkout/?session_id={session_id}")
 
     except Exception as e:
+        print(f"Error in payment_cancel: {str(e)}")
         messages.error(request, "An unexpected error occurred. Please try again.")
         return redirect("checkout")
 
