@@ -31,6 +31,7 @@ class UserSchema(Schema):
     password = fields.Str(required=True, load_only=True)  # Never return password
     role = fields.Str(required=False, missing="customer")
     is_active = fields.Bool(default=True, missing=True)
+    is_locked = fields.Bool(default=False, missing=False)
     created_at = fields.DateTime(required=False)
     updated_at = fields.DateTime(required=False)
     addresses = fields.List(fields.Nested(AddressSchema), required=False)
@@ -40,6 +41,10 @@ class UserSchema(Schema):
         values=fields.Bool(),
         required=False
     )
+    failed_attempts = fields.Int(default=0, missing=0) 
+    last_failed_attempt = fields.DateTime(required=False)
+    reset_token = fields.Str(required=False)
+    reset_token_expires = fields.DateTime(required=False)
 
     @validates("role")
     def validate_role(self, value):
