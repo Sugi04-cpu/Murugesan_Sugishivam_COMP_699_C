@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from bson import ObjectId
 
 def initialize_cart_collection():
- 
     cart_collection = get_collection("carts")
     
     # Create indexes
@@ -143,41 +142,3 @@ def clear_cart(cart_id):
             }
         }
     )
-
-def transfer_guest_cart(session_id, user_id):
-    """Transfer items from guest cart to user cart"""
-    cart_collection = get_collection("carts")
-    
-    # Get guest cart
-    guest_cart = cart_collection.find_one({"session_id": session_id})
-    if not guest_cart:
-        return None
-        
-    # Get or create user cart
-    user_cart = cart_collection.find_one({"user_id": str(user_id)})
-    if not user_cart:
-        create_cart(user_id=user_id)
-        user_cart = cart_collection.find_one({"user_id": str(user_id)})
-    
-    # Transfer items
-    if guest_cart.get("items"):
-        now = datetime.utcnow()
-        # Update user cart with guest items
-        cart_collection.update_one(
-            {"_id": user_cart["_id"]},
-            {
-                "$push": {
-                    "items": {
-                        "$each": guest_cart["items"]
-                    }
-                },
-                "$set": {
-                    "updated_at": now
-                }
-            }
-        )
-        
-        # Remove guest cart
-        cart_collection.delete_one({"_id": guest_cart["_id"]})
-        
-    return user_cart["_id"]

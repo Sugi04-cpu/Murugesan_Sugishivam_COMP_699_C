@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+
+{% block title %}Track Order{% endblock %}
+
+{% block content %}
+    <h1>Track Your Order</h1>
+    <p><strong>Order ID:</strong> {{ order_id }}</p>
+    <p><strong>Order Status:</strong> {{ order_status }}</p>
+
+    <a href="{% url 'my_orders' %}">Back to My Orders</a>
+{% endblock %}
