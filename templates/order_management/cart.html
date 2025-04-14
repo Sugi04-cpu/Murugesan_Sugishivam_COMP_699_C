@@ -1,19 +1,10 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        {%load static%}
-        {% load productFilters %}
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-        <meta name="description" content="" />
-        <meta name="author" content="" />
-        <title>Shopping Cart</title>
-        <link rel="icon" type="image/x-icon" href="assets/favicon.ico" />
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css" rel="stylesheet" />
-        <link href= {% static 'css/styles.css' %} rel="stylesheet" />
-    </head>
+{% extends 'base.html' %}
 
-<!-- Required meta tags -->
+{% block title %} Cart {% endblock %}
+
+
+{% block content %}
+{% include "includes/messages.html"%}
 <style>
     .cart-img {
         width: 80px;
@@ -36,53 +27,42 @@
         50% { transform: translateY(-20px); }
         100% { transform: translateY(0px); }
     }
+    @keyframes bounce {
+        0%, 20%, 50%, 80%, 100% {
+            transform: translateY(0);
+        }
+        40% {
+            transform: translateY(-10px);
+        }
+        60% {
+            transform: translateY(-5px);
+        }
+    }
 </style>
-
-
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container px-4 px-lg-5">
-            <a class="navbar-brand" href="{% url 'render_products' %}">E-Commerce Store</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
-            <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-lg-4">
-                    <li class="nav-item"><a class="nav-link active" aria-current="page" href="{% url 'render_products' %}">Home</a></li>
-                </ul>
-                <!-- Cart button always displayed -->
-                <div class="d-flex align-items-center">
-                    <a href="{% url 'view_cart' %}" class="btn btn-outline-light me-2">
-                        <i class="bi-cart-fill me-1"></i>
-                        Cart
-                        <span class="badge bg-dark text-white ms-1 rounded-pill">{{cart_count|default:0}}</span>
-                    </a>
-                
-                </div>
-            </div>
-        </div>
-    </nav>
     
-<div class="container py-5">
-    <div class="row mb-4">
+<div class="container">
+    <div class="row">
         <div class="col">
             <h2 class="mb-0">Shopping Cart</h2>
             <p class="text-muted">{% if cart_count %}{{ cart_count }} items{% else %}No items{% endif %}</p>
         </div>
     </div>
-    <div class="container mt-3">
-        {% if messages %}
-            {% for message in messages %}
-                <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} alert-dismissible fade show" role="alert">
-                    <strong>
-                        {% if message.tags == 'error' %}Error!
-                        {% elif message.tags == 'warning' %}Warning!
-                        {% else %}Success!{% endif %}
-                    </strong>
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
+    {%if cart_items %}
+    <div class="alert alert-info text-center mt-4" role="alert">
+        <div class="d-flex justify-content-center align-items-center">
+            <i class="bi bi-truck display-6 me-3" style="animation: bounce 2s infinite;"></i>
+            {% if cart_total > 50 %}
+                <p class="mb-0">
+                    <strong>Congratulations!</strong> You qualify for <strong>Free Shipping</strong> on your order!
+                </p>
+            {% else %}
+                <p class="mb-0">
+                    Add <strong>${{ remaining_for_free_shipping|floatformat:2 }}</strong> more to your cart to qualify for <strong>Free Shipping</strong>!
+                </p>
+            {% endif %}
+        </div>
     </div>
+    {% endif %}    
     {% if cart_items %}
         <div class="row">
             <div class="col-12">
@@ -140,7 +120,8 @@
                                                     <button type="submit" 
                                                             name="action" 
                                                             value="decrease" 
-                                                            class="btn btn-outline-secondary btn-sm">
+                                                            class="btn btn-outline-secondary btn-sm"
+                                                            {% if item.quantity <= item.product.stock %}disabled{% endif %}>
                                                         <i class="bi bi-dash"></i>
                                                     </button>
                                                     <span class="mx-3">{{ item.quantity }}</span>
@@ -152,6 +133,11 @@
                                                         <i class="bi bi-plus"></i>
                                                     </button>
                                                 </form>
+                                                {% if item.product.stock <= 5 and item.product.stock > 0 %}
+                                                    <small class="text-danger mt-1">
+                                                        Only {{ item.product.stock }} left in stock
+                                                    </small>
+                                                {% endif %}
                                             </div>
                                         </td>
                                         <td>
@@ -192,8 +178,6 @@
                                     </button>
                                 </form>
                             </div>
-                            
-                          
                                 {% if request.user_data %}
                                 <div class="col-md-4 text-md-center my-3 my-md-0">
                                     <h5 class="mb-0">Cart Total: ${{ cart_total|floatformat:2 }}</h5>
@@ -210,7 +194,6 @@
                                     to view total
                                 </div>
                                 {% endif %}
-                          
                             <div class="col-md-4 text-md-end">
                                 {% if request.user_data %}
                                     <a href="{% url 'checkout' %}" class="btn btn-primary">
@@ -283,24 +266,4 @@
     </div>
 </div>
 
-<!-- Uncomment the Bootstrap script -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-{% comment %} <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        var toastElList = [].slice.call(document.querySelectorAll('.toast'));
-        var toastList = toastElList.map(function(toastEl) {
-            var toast = new bootstrap.Toast(toastEl, {
-                autohide: true,
-                delay: 5000
-            });
-            toast.show();
-            return toast;
-        });
-    }); {% endcomment %}
-</script>
-</body>
-</html>
-</body>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></>
-</html>
+{% endblock %}

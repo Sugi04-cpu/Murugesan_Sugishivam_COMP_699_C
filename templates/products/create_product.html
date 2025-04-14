@@ -1,6 +1,10 @@
 {% extends "base.html" %}
 
+{% block title %} Add Product {% endblock %}
+
+
 {% block content %}
+{% include "includes/messages.html"%}
 <div class="container mt-5">
     <h2>Add a New Product</h2>
     
@@ -10,8 +14,7 @@
 
     <form method="POST">
         {% csrf_token %}
-        
-        <!-- Basic Information -->
+
         <div class="row">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Product Name:</label>
@@ -23,8 +26,6 @@
                 <input type="number" name="price" class="form-control" step="0.01" required>
             </div>
         </div>
-
-        <!-- Category & Stock -->
         <div class="row">
             <div class="col-md-6 mb-3">
                 <label class="form-label">Category:</label>
@@ -36,8 +37,6 @@
                 <input type="number" name="stock" class="form-control" required>
             </div>
         </div>
-
-        <!-- New Business Logic Fields -->
         <div class="row">
             <div class="col-md-4 mb-3">
                 <label class="form-label">Low Stock Threshold:</label>
@@ -57,7 +56,6 @@
             </div>
         </div>
 
-        <!-- Checkboxes -->
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="form-check">
@@ -76,8 +74,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Product Attributes -->
         <div class="card mb-4">
             <div class="card-header">Product Attributes</div>
             <div class="card-body">
@@ -102,8 +98,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Form Actions -->
         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
             <button type="submit" class="btn btn-primary px-4">Add Product</button>
             <a href="{% url 'render_products' %}" class="btn btn-outline-secondary px-4">Cancel</a>
