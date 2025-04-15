@@ -13,12 +13,16 @@ from django.core.mail import send_mail
 from decouple import config
 from bson import ObjectId, errors
 import json
+from marshmallow import ValidationError
 from datetime import datetime, timedelta
 from ..mongoDb import get_collection
+from .cart_schema import CartSchema  # Import the schema for validation
+from ..utils.date_utils import validate_and_convert_dates
 
 product_collection = get_collection("products")
 carts_collection = get_collection("carts")
 user_collection = get_collection("users")
+cart_schema = CartSchema()
 
 def handle_response(request, context=None, message=None, status=200, redirect_url=None):
     """
@@ -153,32 +157,23 @@ def add_to_cart(request, product_id):
         try:
             product_object_id = ObjectId(product_id)
         except errors.InvalidId:
-            messages.error(request, "Invalid product ID.")
-            return redirect('view_cart')
-
+            return handle_response(request, None, "Invalid product ID.", 400)
 
         # 2. Validate product exists and check stock
         product = product_collection.find_one({"_id": product_object_id})
         if not product:
-            messages.error(request, "Invalid product ID.")
-            return redirect('view_cart')
+            return handle_response(request, None, "Product not found.", 404)
 
-        
         if product.get('stock', 0) <= 0:
-            messages.error(request, "Invalid product ID.")
-            return redirect('view_cart')
+            return handle_response(request, None, "Product is out of stock.", 400)
 
-
-        # 3. Get or create cart with error handling
-        
+        # 3. Get or create cart
         try:
             if hasattr(request, 'user_data') and request.user_data:
                 user_id = request.user_data.get('user_id')
                 if not user_id:
-                    messages.error(request, "Invalid product ID.")
-                    return redirect('view_cart')
+                    return handle_response(request, None, "User not authenticated.", 401)
 
-                
                 cart = get_user_cart(user_id=user_id)
                 if not cart:
                     create_cart(user_id=user_id)
@@ -191,10 +186,9 @@ def add_to_cart(request, product_id):
                 if not cart:
                     create_cart(session_id=request.session.session_key)
                     cart = get_user_cart(session_id=request.session.session_key)
+
             if not cart:
-                raise Exception("Failed to create guest cart")
-    
-            
+                raise Exception("Failed to create or retrieve cart.")
 
         except Exception as e:
             return handle_response(request, None, f"Cart creation failed: {str(e)}", 500)
@@ -213,24 +207,32 @@ def add_to_cart(request, product_id):
 
             # Validate quantity value
             if quantity <= 0:
-                return handle_response(request, None, "Quantity must be positive", 400)
-            
+                return handle_response(request, None, "Quantity must be positive.", 400)
+
             if quantity > product.get('stock', 0):
                 return handle_response(
-                    request, 
-                    None, 
-                    f"Only {product.get('stock')} items available", 
+                    request,
+                    None,
+                    f"Only {product.get('stock')} items available.",
                     400
                 )
 
         except (json.JSONDecodeError, ValueError):
-            return handle_response(request, None, "Invalid quantity format", 400)
+            return handle_response(request, None, "Invalid quantity format.", 400)
 
-        # 5. Check existing cart item and update total quantity
+         # Validate and convert datetime fields
+        cart = validate_and_convert_dates(cart, ["created_at", "updated_at", "expires_at"])
+        
+        # 5. Validate cart data using CartSchema
+        try:
+            cart_schema.load(cart)  # Validate the cart data
+        except ValidationError as e:
+            return handle_response(request, None, f"Cart validation failed: {e.messages}", 400)
+
+        # 6. Check existing cart item and update total quantity
         current_cart_items = get_cart_items(cart["_id"])
         existing_item = next(
-            (item for item in current_cart_items 
-             if str(item["product"]["_id"]) == product_id), 
+            (item for item in current_cart_items if str(item["product"]["_id"]) == product_id),
             None
         )
 
@@ -238,25 +240,25 @@ def add_to_cart(request, product_id):
             new_quantity = existing_item["quantity"] + quantity
             if new_quantity > product.get('stock', 0):
                 return handle_response(
-                    request, 
-                    None, 
-                    f"Cannot add {quantity} more items. Only {product.get('stock') - existing_item['quantity']} available", 
+                    request,
+                    None,
+                    f"Cannot add {quantity} more items. Only {product.get('stock') - existing_item['quantity']} available.",
                     400
                 )
 
-        # 6. Update cart with error handling
+        # 7. Update cart with error handling
         try:
             update_cart_item(str(cart["_id"]), str(product_id), quantity)
         except Exception as e:
             return handle_response(request, None, f"Failed to update cart: {str(e)}", 500)
 
-        # 7. Return success response
+        # 8. Return success response
         if request.content_type == "application/json":
             return JsonResponse({
-                "message": "Item added to cart successfully",
+                "message": "Item added to cart successfully.",
                 "cart_count": quantity,
             }, status=200)
-        
+
         return redirect("view_cart")
 
     except Exception as e:

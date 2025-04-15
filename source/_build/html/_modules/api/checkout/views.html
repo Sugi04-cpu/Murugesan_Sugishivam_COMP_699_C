@@ -1,0 +1,406 @@
+
+<!DOCTYPE html>
+
+<html lang="Python Django">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>api.checkout.views &#8212; E-commerce platform 04/29/2025 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/alabaster.css" />
+    <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for api.checkout.views</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">django.shortcuts</span> <span class="kn">import</span> <span class="n">render</span><span class="p">,</span> <span class="n">redirect</span>
+<span class="kn">from</span> <span class="nn">django.views.decorators.csrf</span> <span class="kn">import</span> <span class="n">csrf_exempt</span>
+<span class="kn">from</span> <span class="nn">..cart_management.cart_management_db</span> <span class="kn">import</span> <span class="n">get_user_cart</span><span class="p">,</span> <span class="n">get_cart_items</span>
+<span class="kn">from</span> <span class="nn">..orders.order_schema</span> <span class="kn">import</span> <span class="n">OrderSchema</span>
+<span class="kn">from</span> <span class="nn">marshmallow</span> <span class="kn">import</span> <span class="n">ValidationError</span>
+<span class="kn">import</span> <span class="nn">stripe</span>
+<span class="kn">from</span> <span class="nn">django.conf</span> <span class="kn">import</span> <span class="n">settings</span>
+<span class="kn">from</span> <span class="nn">django.urls</span> <span class="kn">import</span> <span class="n">reverse</span>
+<span class="kn">from</span> <span class="nn">django.contrib</span> <span class="kn">import</span> <span class="n">messages</span>
+<span class="kn">from</span> <span class="nn">django.core.mail</span> <span class="kn">import</span> <span class="n">send_mail</span>
+<span class="kn">from</span> <span class="nn">django.contrib</span> <span class="kn">import</span> <span class="n">messages</span>
+<span class="kn">from</span> <span class="nn">api.mongoDb</span> <span class="kn">import</span> <span class="n">get_collection</span>
+<span class="kn">from</span> <span class="nn">bson</span> <span class="kn">import</span> <span class="n">ObjectId</span>
+<span class="kn">import</span> <span class="nn">uuid</span>
+
+<span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+
+<span class="c1"># Initialize Stripe</span>
+<span class="n">stripe</span><span class="o">.</span><span class="n">api_key</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">STRIPE_SECRET_KEY</span>
+<span class="n">users_collection</span> <span class="o">=</span> <span class="n">get_collection</span><span class="p">(</span><span class="s2">&quot;users&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="send_verification_email"><a class="viewcode-back" href="../../../docs/api.checkout.html#api.checkout.views.send_verification_email">[docs]</a><span class="nd">@csrf_exempt</span>
+<span class="k">def</span> <span class="nf">send_verification_email</span><span class="p">(</span><span class="n">email</span><span class="p">,</span> <span class="n">verification_token</span><span class="p">,</span> <span class="n">user_id</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Send verification email for checkout&quot;&quot;&quot;</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">verification_url</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">settings</span><span class="o">.</span><span class="n">SITE_URL</span><span class="si">}{</span><span class="n">reverse</span><span class="p">(</span><span class="s1">&#39;verify_email&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="o">=</span><span class="p">[</span><span class="n">verification_token</span><span class="p">,</span><span class="w"> </span><span class="n">user_id</span><span class="p">])</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="n">timeout</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">EMAIL_VERIFICATION_TIMEOUT</span>
+        <span class="n">send_mail</span><span class="p">(</span>
+            <span class="n">subject</span><span class="o">=</span><span class="s1">&#39;Verify Email to Complete Your Purchase - GlobalTech&#39;</span><span class="p">,</span>
+            <span class="n">message</span><span class="o">=</span><span class="sa">f</span><span class="s1">&#39;&#39;&#39;Please verify your email to complete your purchase.</span>
+<span class="s1">            </span>
+<span class="s1">Click here to verify: </span><span class="si">{</span><span class="n">verification_url</span><span class="si">}</span>
+<span class="s1">            </span>
+<span class="s1">This link expires in </span><span class="si">{</span><span class="n">timeout</span><span class="si">}</span><span class="s1"> minutes.&#39;&#39;&#39;</span><span class="p">,</span>
+            <span class="n">from_email</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">DEFAULT_FROM_EMAIL</span><span class="p">,</span>
+            <span class="n">recipient_list</span><span class="o">=</span><span class="p">[</span><span class="n">email</span><span class="p">],</span>
+            <span class="n">fail_silently</span><span class="o">=</span><span class="kc">False</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error sending verification email: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+<div class="viewcode-block" id="checkout"><a class="viewcode-back" href="../../../docs/api.checkout.html#api.checkout.views.checkout">[docs]</a><span class="nd">@csrf_exempt</span>
+<span class="k">def</span> <span class="nf">checkout</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Retrieve coupons from the database</span>
+        <span class="n">coupons_collection</span> <span class="o">=</span> <span class="n">get_collection</span><span class="p">(</span><span class="s2">&quot;coupons&quot;</span><span class="p">)</span>
+        <span class="n">active_coupons</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="n">coupon</span><span class="p">[</span><span class="s2">&quot;code&quot;</span><span class="p">]:</span> <span class="n">coupon</span><span class="p">[</span><span class="s2">&quot;discount_percentage&quot;</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">coupon</span> <span class="ow">in</span> <span class="n">coupons_collection</span><span class="o">.</span><span class="n">find</span><span class="p">({</span><span class="s2">&quot;is_active&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">})</span>
+        <span class="p">}</span>
+
+        <span class="c1"># Check for user_data in request or session</span>
+        <span class="n">session_id</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">GET</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;session_id&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">session_id</span><span class="p">:</span>
+            <span class="n">checkout_session</span> <span class="o">=</span> <span class="n">stripe</span><span class="o">.</span><span class="n">checkout</span><span class="o">.</span><span class="n">Session</span><span class="o">.</span><span class="n">retrieve</span><span class="p">(</span><span class="n">session_id</span><span class="p">)</span>
+            <span class="n">user_id</span> <span class="o">=</span> <span class="n">checkout_session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;client_reference_id&quot;</span><span class="p">)</span>        
+
+        <span class="n">user_data</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="p">,</span>  <span class="s1">&#39;user_data&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="n">request</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;user_data&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="p">{</span><span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="n">user_id</span><span class="p">}</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user_data</span><span class="p">:</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Payment was cancelled. Please log in to view your cart.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s2">&quot;login_view&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Verify email before proceeding</span>
+        <span class="n">user</span> <span class="o">=</span> <span class="n">users_collection</span><span class="o">.</span><span class="n">find_one</span><span class="p">({</span><span class="s2">&quot;_id&quot;</span><span class="p">:</span> <span class="n">ObjectId</span><span class="p">(</span><span class="n">user_data</span><span class="p">[</span><span class="s2">&quot;user_id&quot;</span><span class="p">])})</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="p">:</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;User not found&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;view_cart&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Get cart and process items</span>
+        <span class="n">cart</span> <span class="o">=</span> <span class="n">get_user_cart</span><span class="p">(</span><span class="n">user_id</span><span class="o">=</span><span class="n">user_data</span><span class="p">[</span><span class="s2">&quot;user_id&quot;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cart</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">render</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s1">&#39;order_management/cart.html&#39;</span><span class="p">,</span> <span class="p">{</span>
+                <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="s2">&quot;No cart found&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;cart_items&quot;</span><span class="p">:</span> <span class="p">[],</span>
+                <span class="s2">&quot;cart_total&quot;</span><span class="p">:</span> <span class="mi">0</span>
+            <span class="p">})</span>
+
+        <span class="c1"># Verify email and send verification link if not verified</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;is_verified&quot;</span><span class="p">):</span>
+            <span class="n">verification_token</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">uuid</span><span class="o">.</span><span class="n">uuid4</span><span class="p">())</span>
+            <span class="n">users_collection</span><span class="o">.</span><span class="n">update_one</span><span class="p">(</span>
+                <span class="p">{</span><span class="s2">&quot;_id&quot;</span><span class="p">:</span> <span class="n">user</span><span class="p">[</span><span class="s2">&quot;_id&quot;</span><span class="p">]},</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;$set&quot;</span><span class="p">:</span> <span class="p">{</span>
+                        <span class="s2">&quot;verification_token&quot;</span><span class="p">:</span> <span class="n">verification_token</span><span class="p">,</span>
+                        <span class="s2">&quot;verification_token_expires&quot;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">EMAIL_VERIFICATION_TIMEOUT</span><span class="p">)</span>
+                    <span class="p">}</span>
+                <span class="p">}</span>
+            <span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">send_verification_email</span><span class="p">(</span><span class="n">user</span><span class="p">[</span><span class="s2">&quot;email&quot;</span><span class="p">],</span> <span class="n">verification_token</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">user</span><span class="p">[</span><span class="s2">&quot;_id&quot;</span><span class="p">])):</span>
+                <span class="n">messages</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Please verify your email to complete checkout. Verification link sent.&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Failed to send verification email. Please try again.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;view_cart&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Process cart for verified users</span>
+        <span class="n">cart_items</span> <span class="o">=</span> <span class="n">get_cart_items</span><span class="p">(</span><span class="n">cart</span><span class="p">[</span><span class="s2">&quot;_id&quot;</span><span class="p">])</span>
+        <span class="n">cart_total</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">cart_items</span><span class="p">:</span>
+            <span class="n">product</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;product&quot;</span><span class="p">]</span>
+            <span class="n">quantity</span> <span class="o">=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;quantity&quot;</span><span class="p">]</span>
+            <span class="n">price</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">product</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;price&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+            <span class="k">if</span> <span class="n">product</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;discount&quot;</span><span class="p">):</span>
+                <span class="n">discount</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">product</span><span class="p">[</span><span class="s2">&quot;discount&quot;</span><span class="p">])</span> <span class="o">/</span> <span class="mi">100</span>
+                <span class="n">price</span> <span class="o">=</span> <span class="n">price</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">discount</span><span class="p">)</span>
+
+            <span class="n">item</span><span class="p">[</span><span class="s2">&quot;subtotal&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">price</span> <span class="o">*</span> <span class="n">quantity</span>
+            <span class="n">cart_total</span> <span class="o">+=</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;subtotal&quot;</span><span class="p">]</span>
+        
+        <span class="c1"># Apply 10% discount for cart total over $100</span>
+        <span class="k">if</span> <span class="n">cart_total</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">:</span>
+            <span class="n">cart_total</span> <span class="o">-=</span> <span class="n">cart_total</span> <span class="o">*</span> <span class="mf">0.1</span> 
+
+        <span class="c1"># Calculate shipping cost, free shipping for orders more than $50</span>
+        <span class="n">shipping_cost</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">cart_total</span> <span class="o">&gt;</span> <span class="mi">50</span> <span class="k">else</span> <span class="mf">10.00</span>
+
+        <span class="c1"># Handle coupon code</span>
+        <span class="n">coupon_code</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">POST</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;coupon_code&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="n">coupon_discount</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">coupon_code</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">coupon_code</span> <span class="ow">in</span> <span class="n">active_coupons</span><span class="p">:</span>
+                <span class="n">discount_value</span> <span class="o">=</span> <span class="n">active_coupons</span><span class="p">[</span><span class="n">coupon_code</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">discount_value</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">discount_value</span> <span class="o">&lt;</span> <span class="mi">100</span><span class="p">:</span>  <span class="c1"># Percentage discount</span>
+                        <span class="n">coupon_discount</span> <span class="o">=</span> <span class="n">cart_total</span> <span class="o">*</span> <span class="p">(</span><span class="n">discount_value</span> <span class="o">/</span> <span class="mi">100</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>  <span class="c1"># Flat discount</span>
+                        <span class="n">coupon_discount</span> <span class="o">=</span> <span class="n">discount_value</span>
+                    <span class="n">messages</span><span class="o">.</span><span class="n">success</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Coupon &#39;</span><span class="si">{</span><span class="n">coupon_code</span><span class="si">}</span><span class="s2">&#39; applied successfully!&quot;</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># Handle free shipping coupon</span>
+                    <span class="n">shipping_cost</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="n">messages</span><span class="o">.</span><span class="n">success</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Coupon &#39;</span><span class="si">{</span><span class="n">coupon_code</span><span class="si">}</span><span class="s2">&#39; applied successfully! Free shipping applied.&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Invalid coupon code.&quot;</span><span class="p">)</span>
+        
+        <span class="c1"># Ensure discount does not exceed cart total</span>
+        <span class="n">coupon_discount</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">coupon_discount</span><span class="p">,</span> <span class="n">cart_total</span><span class="p">)</span>
+        <span class="n">cart_total</span> <span class="o">-=</span> <span class="n">coupon_discount</span>
+
+        <span class="n">context</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;cart_items&quot;</span><span class="p">:</span> <span class="n">cart_items</span><span class="p">,</span>
+            <span class="s2">&quot;cart_total&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">cart_total</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="s2">&quot;shipping_cost&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">shipping_cost</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="s2">&quot;total_with_shipping&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">cart_total</span> <span class="o">+</span> <span class="n">shipping_cost</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+            <span class="s2">&quot;stripe_public_key&quot;</span><span class="p">:</span> <span class="n">settings</span><span class="o">.</span><span class="n">STRIPE_PUBLIC_KEY</span><span class="p">,</span>
+            <span class="s2">&quot;user&quot;</span><span class="p">:</span> <span class="n">user</span><span class="p">,</span>
+            <span class="s2">&quot;coupon_discount&quot;</span><span class="p">:</span> <span class="nb">round</span><span class="p">(</span><span class="n">coupon_discount</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span>
+        <span class="p">}</span>
+
+        <span class="k">return</span> <span class="n">render</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s1">&#39;order_management/cart.html&#39;</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span>
+
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error in checkout: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">render</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s1">&#39;order_management/cart.html&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)})</span></div>
+
+<div class="viewcode-block" id="payment_success"><a class="viewcode-back" href="../../../docs/api.checkout.html#api.checkout.views.payment_success">[docs]</a><span class="nd">@csrf_exempt</span>
+<span class="k">def</span> <span class="nf">payment_success</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Retrieve user data</span>
+        <span class="n">user_data</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s1">&#39;user_data&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">or</span> <span class="n">request</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;user_data&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user_data</span><span class="p">:</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;User not found. Please log in again.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;login_view&#39;</span><span class="p">)</span>
+
+        <span class="n">user</span> <span class="o">=</span> <span class="n">users_collection</span><span class="o">.</span><span class="n">find_one</span><span class="p">({</span><span class="s2">&quot;_id&quot;</span><span class="p">:</span> <span class="n">ObjectId</span><span class="p">(</span><span class="n">user_data</span><span class="p">[</span><span class="s2">&quot;user_id&quot;</span><span class="p">])})</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">user</span><span class="p">:</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;User not found.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;checkout&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Retrieve cart and calculate total</span>
+        <span class="n">cart</span> <span class="o">=</span> <span class="n">get_user_cart</span><span class="p">(</span><span class="n">user_id</span><span class="o">=</span><span class="n">user_data</span><span class="p">[</span><span class="s2">&quot;user_id&quot;</span><span class="p">])</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cart</span><span class="p">:</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;No cart found.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;checkout&#39;</span><span class="p">)</span>
+
+        <span class="n">cart_items</span> <span class="o">=</span> <span class="n">get_cart_items</span><span class="p">(</span><span class="n">cart</span><span class="p">[</span><span class="s2">&quot;_id&quot;</span><span class="p">])</span>
+        <span class="n">cart_total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">item</span><span class="p">[</span><span class="s2">&quot;subtotal&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">cart_items</span><span class="p">)</span>
+
+        <span class="c1"># Apply 10% discount if cart total exceeds $100</span>
+        <span class="k">if</span> <span class="n">cart_total</span> <span class="o">&gt;</span> <span class="mi">100</span><span class="p">:</span>
+            <span class="n">cart_total</span> <span class="o">-=</span> <span class="n">cart_total</span> <span class="o">*</span> <span class="mf">0.1</span>
+
+        <span class="c1"># Add loyalty points (2% of cart total)</span>
+        <span class="n">loyalty_points</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">cart_total</span> <span class="o">*</span> <span class="mf">0.02</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">users_collection</span><span class="o">.</span><span class="n">update_one</span><span class="p">(</span>
+            <span class="p">{</span><span class="s2">&quot;_id&quot;</span><span class="p">:</span> <span class="n">user</span><span class="p">[</span><span class="s2">&quot;_id&quot;</span><span class="p">]},</span>
+            <span class="p">{</span><span class="s2">&quot;$inc&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;loyalty_points&quot;</span><span class="p">:</span> <span class="n">loyalty_points</span><span class="p">}}</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Create an order in the orders collection</span>
+        <span class="n">order</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="n">user</span><span class="p">[</span><span class="s2">&quot;_id&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;order_status&quot;</span><span class="p">:</span> <span class="s2">&quot;Pending&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;items&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="p">{</span>
+                    <span class="s2">&quot;product_id&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;product&quot;</span><span class="p">][</span><span class="s2">&quot;_id&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;product&quot;</span><span class="p">][</span><span class="s2">&quot;name&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;quantity&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;quantity&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;price&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;product&quot;</span><span class="p">][</span><span class="s2">&quot;price&quot;</span><span class="p">],</span>
+                    <span class="s2">&quot;subtotal&quot;</span><span class="p">:</span> <span class="n">item</span><span class="p">[</span><span class="s2">&quot;subtotal&quot;</span><span class="p">]</span>
+                <span class="p">}</span>
+                <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">cart_items</span>
+            <span class="p">],</span>
+            <span class="s2">&quot;total&quot;</span><span class="p">:</span> <span class="n">cart_total</span><span class="p">,</span>
+            <span class="s2">&quot;created_at&quot;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">(),</span>
+            <span class="s2">&quot;updated_at&quot;</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">()</span>
+        <span class="p">}</span>
+
+        <span class="c1"># Validate the order using OrderSchema</span>
+        <span class="n">order_schema</span> <span class="o">=</span> <span class="n">OrderSchema</span><span class="p">()</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">validated_order</span> <span class="o">=</span> <span class="n">order_schema</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>  <span class="c1"># Validate the order data</span>
+        <span class="k">except</span> <span class="n">ValidationError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Order validation error: </span><span class="si">{</span><span class="n">e</span><span class="o">.</span><span class="n">messages</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Failed to process the order. Please try again.&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;checkout&#39;</span><span class="p">)</span>
+
+        <span class="c1"># Insert the validated order into the database</span>
+        <span class="n">orders_collection</span> <span class="o">=</span> <span class="n">get_collection</span><span class="p">(</span><span class="s2">&quot;orders&quot;</span><span class="p">)</span>
+        <span class="n">orders_collection</span><span class="o">.</span><span class="n">insert_one</span><span class="p">(</span><span class="n">validated_order</span><span class="p">)</span>
+
+        <span class="c1"># Clear the cart after successful payment</span>
+        <span class="n">cart_items_collection</span> <span class="o">=</span> <span class="n">get_collection</span><span class="p">(</span><span class="s2">&quot;cart_items&quot;</span><span class="p">)</span>
+        <span class="n">cart_items_collection</span><span class="o">.</span><span class="n">delete_many</span><span class="p">({</span><span class="s2">&quot;cart_id&quot;</span><span class="p">:</span> <span class="n">cart</span><span class="p">[</span><span class="s2">&quot;_id&quot;</span><span class="p">]})</span>
+
+        <span class="n">messages</span><span class="o">.</span><span class="n">success</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Payment successful! You earned </span><span class="si">{</span><span class="n">loyalty_points</span><span class="si">}</span><span class="s2"> loyalty points.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">render</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s1">&#39;payment_success.html&#39;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;loyalty_points&quot;</span><span class="p">:</span> <span class="n">loyalty_points</span><span class="p">})</span>
+
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error in payment_success: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;An error occurred while processing your payment.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;checkout&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="payment_cancel"><a class="viewcode-back" href="../../../docs/api.checkout.html#api.checkout.views.payment_cancel">[docs]</a><span class="nd">@csrf_exempt</span>
+<span class="k">def</span> <span class="nf">payment_cancel</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Retrieve the session_id from the query parameters</span>
+        <span class="n">session_id</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">GET</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;session_id&#39;</span><span class="p">)</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Payment was cancelled. Your cart items are still saved.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;/checkout/?session_id=</span><span class="si">{</span><span class="n">session_id</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Error in payment_cancel: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;An unexpected error occurred. Please try again.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s2">&quot;checkout&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="process_payment"><a class="viewcode-back" href="../../../docs/api.checkout.html#api.checkout.views.process_payment">[docs]</a><span class="nd">@csrf_exempt</span>
+<span class="k">def</span> <span class="nf">process_payment</span><span class="p">(</span><span class="n">request</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">method</span> <span class="o">!=</span> <span class="s2">&quot;POST&quot;</span><span class="p">:</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Invalid request method&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;checkout&#39;</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">cart_total</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">POST</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;cart_total&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="n">shipping_cost</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">POST</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;shipping_cost&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="n">coupon_discount</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">request</span><span class="o">.</span><span class="n">POST</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;coupon_discount&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">))</span>
+
+        <span class="n">cart</span> <span class="o">=</span> <span class="n">get_user_cart</span><span class="p">(</span><span class="n">user_id</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">user_data</span><span class="p">[</span><span class="s2">&quot;user_id&quot;</span><span class="p">])</span> <span class="k">if</span> <span class="n">request</span><span class="o">.</span><span class="n">user_data</span> <span class="k">else</span> <span class="n">get_user_cart</span><span class="p">(</span><span class="n">session_id</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">session_key</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">cart</span><span class="p">:</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;No cart found&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;checkout&#39;</span><span class="p">)</span>       
+
+        <span class="n">total</span> <span class="o">=</span> <span class="n">cart_total</span> <span class="o">-</span> <span class="n">coupon_discount</span> <span class="o">+</span> <span class="n">shipping_cost</span>
+        <span class="n">line_items</span> <span class="o">=</span> <span class="p">[{</span>
+            <span class="s1">&#39;price_data&#39;</span><span class="p">:</span> <span class="p">{</span>
+                <span class="s1">&#39;currency&#39;</span><span class="p">:</span> <span class="s1">&#39;usd&#39;</span><span class="p">,</span>
+                <span class="s1">&#39;unit_amount&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">total</span> <span class="o">*</span> <span class="mi">100</span><span class="p">),</span>
+                <span class="s1">&#39;product_data&#39;</span><span class="p">:</span> <span class="p">{</span>
+                    <span class="s1">&#39;name&#39;</span><span class="p">:</span> <span class="s1">&#39;Order Total&#39;</span><span class="p">,</span>
+                    <span class="s1">&#39;description&#39;</span><span class="p">:</span> <span class="s1">&#39;Includes all items, discounts, and shipping&#39;</span><span class="p">,</span>
+                <span class="p">},</span>
+            <span class="p">},</span>
+            <span class="s1">&#39;quantity&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="p">}]</span>
+
+        <span class="c1"># Create Stripe checkout session</span>
+        <span class="n">checkout_session</span> <span class="o">=</span> <span class="n">stripe</span><span class="o">.</span><span class="n">checkout</span><span class="o">.</span><span class="n">Session</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+            <span class="n">payment_method_types</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;card&#39;</span><span class="p">],</span>
+            <span class="n">line_items</span><span class="o">=</span><span class="n">line_items</span><span class="p">,</span>
+            <span class="n">mode</span><span class="o">=</span><span class="s1">&#39;payment&#39;</span><span class="p">,</span>
+            <span class="n">success_url</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">build_absolute_uri</span><span class="p">(</span><span class="n">reverse</span><span class="p">(</span><span class="s1">&#39;payment_success&#39;</span><span class="p">))</span> <span class="o">+</span> <span class="s1">&#39;?session_id=</span><span class="si">{CHECKOUT_SESSION_ID}</span><span class="s1">&#39;</span><span class="p">,</span>
+            <span class="n">cancel_url</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">build_absolute_uri</span><span class="p">(</span><span class="n">reverse</span><span class="p">(</span><span class="s1">&#39;payment_cancel&#39;</span><span class="p">))</span> <span class="o">+</span> <span class="s1">&#39;?session_id=</span><span class="si">{CHECKOUT_SESSION_ID}</span><span class="s1">&#39;</span><span class="p">,</span>
+            <span class="n">billing_address_collection</span><span class="o">=</span><span class="s1">&#39;required&#39;</span><span class="p">,</span>
+            <span class="n">shipping_address_collection</span><span class="o">=</span><span class="p">{</span>
+                <span class="s1">&#39;allowed_countries&#39;</span><span class="p">:</span> <span class="p">[</span><span class="s1">&#39;US&#39;</span><span class="p">],</span>
+            <span class="p">},</span>
+            <span class="n">client_reference_id</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">user_data</span><span class="p">[</span><span class="s2">&quot;user_id&quot;</span><span class="p">],</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">checkout_session</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">checkout_session</span><span class="o">.</span><span class="n">id</span><span class="p">:</span>
+            <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;Failed to create checkout session&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;checkout&#39;</span><span class="p">)</span>
+
+        <span class="c1"># If successful, redirect to Stripe&#39;s checkout page</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="n">checkout_session</span><span class="o">.</span><span class="n">url</span><span class="p">)</span>
+
+    <span class="k">except</span> <span class="n">stripe</span><span class="o">.</span><span class="n">error</span><span class="o">.</span><span class="n">StripeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;Payment processing failed: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;checkout&#39;</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">messages</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;An unexpected error occurred. Please try again.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">redirect</span><span class="p">(</span><span class="s1">&#39;checkout&#39;</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">E-commerce platform</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2025, Sugishivam Murugesan.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 5.0.2</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

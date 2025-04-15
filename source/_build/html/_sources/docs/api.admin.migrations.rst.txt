@@ -1,0 +1,10 @@
+api.admin.migrations package
+============================
+
+Module contents
+---------------
+
+.. automodule:: api.admin.migrations
+   :members:
+   :undoc-members:
+   :show-inheritance:

@@ -1,8 +1,7 @@
-from marshmallow import Schema, fields, ValidationError, validate
+from marshmallow import Schema, fields, ValidationError, validates, validate
 from bson import ObjectId
-import datetime
+from datetime import datetime
 from api.mongoDb import get_collection
-
 
 
 # Custom field for ObjectId validation
@@ -27,13 +26,9 @@ ProductSchema = Schema.from_dict({
     "category": fields.Str(required=True),
     "stock": fields.Int(required=True, validate=lambda x: x >= 0),  # Stock must be >= 0
     "seller_id": fields.Raw(required=True, allow_none=True),
-    "is_popular": fields.Bool(required=False, default=False),               # Popular product flag
-    "low_stock_threshold": fields.Int(required=False, default=10),          # Alert when stock < 10
     "discount_percentage": fields.Int(required=False, default=0, validate=validate.Range(min=0, max=100)),
     "is_active": fields.Bool(required=False, default=True),                 # Hide inactive products
     "tags": fields.List(fields.Str(), required=False),                      # Tags for filtering
-    "created_at": fields.DateTime(required=False, dump_default=datetime.datetime.now()),
-    "updated_at": fields.DateTime(required=False, dump_default=datetime.datetime.now()),
     "attributes": fields.Dict(
         required=True,
         keys=fields.Str(),
@@ -43,5 +38,37 @@ ProductSchema = Schema.from_dict({
     "image_url": fields.Url(),
     "availability": fields.Str(required=False, default=True),
 })
+
+# Individual Review Schema
+class IndividualReviewSchema(Schema):
+    id = ObjectIdField(required=True)  # Unique ID for the review
+    user_id = fields.Str(required=True)  # Session key or user ID
+    rating = fields.Int(required=True, validate=lambda x: 1 <= x <= 5)  # Rating between 1 and 5
+    status = fields.Str(required=True, validate=lambda x: x in ["pending", "approved", "rejected"])  # Review status
+    review = fields.Str(required=True)  # Review text
+    created_at = fields.DateTime(required=True)  # Timestamp when the review was created
+    updated_at = fields.DateTime(required=True)  # Timestamp when the review was last updated
+
+    @validates("rating")
+    def validate_rating(self, value):
+        if not (1 <= value <= 5):
+            raise ValidationError("Rating must be between 1 and 5.")
+
+    @validates("status")
+    def validate_status(self, value):
+        if value not in ["pending", "approved", "rejected"]:
+            raise ValidationError("Invalid status. Must be one of ['pending', 'approved', 'rejected'].")
+
+
+# Review Schema
+class ReviewSchema(Schema):
+    _id = ObjectIdField(required=False)
+    product_id = ObjectIdField(required=True)  # Reference to the product's _id
+    reviews = fields.List(fields.Nested(IndividualReviewSchema), required=True)  # Array of reviews
+
+    @validates("reviews")
+    def validate_reviews(self, value):
+        if not value or not isinstance(value, list):
+            raise ValidationError("Reviews must be a non-empty list of valid review objects.")
 
 

@@ -5,7 +5,9 @@ from django.contrib import messages
 from api.mongoDb import get_collection
 from bson import ObjectId
 from datetime import datetime
-
+from .order_schema import RefundRequestSchema
+from marshmallow import ValidationError
+from ..utils.date_utils import validate_and_convert_dates
 
 @csrf_exempt
 def my_orders(request):
@@ -107,7 +109,21 @@ def request_refund(request, order_id):
                 "status": "Pending",
                 "requested_at": datetime.utcnow(),
             }
-            get_collection("refund_requests").insert_one(refund_request)
+            refund_schema = RefundRequestSchema()
+            
+
+            refund_request = validate_and_convert_dates(refund_request, ["requested_at"])
+           
+            # Validate the refund request data
+
+            try:
+                validated_refund = refund_schema.load(refund_request)
+            except ValidationError as e:
+                print(f"Refund validation error: {e.messages}")
+                messages.error(request, "Failed to submit refund request.")
+                return redirect("my_orders")
+            # Insert the validated data in database
+            get_collection("refund_requests").insert_one(validated_refund)
 
             # Update the order status to "Refund Requested"
             get_collection("orders").update_one(

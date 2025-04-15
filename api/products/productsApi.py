@@ -3,17 +3,19 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
 from marshmallow import ValidationError
-from .schema import ProductSchema
+from .schema import ProductSchema, ReviewSchema
 from api.mongoDb import get_collection
 import json
 from bson import ObjectId
 from types import SimpleNamespace
 from datetime import datetime
+from ..utils.date_utils import validate_and_convert_dates
 
 # Fetch the collection dynamically
 product_collection = get_collection("products")
 reviews_collection = get_collection("reviews")
 product_schema = ProductSchema()
+review_schema = ReviewSchema()
 
 @csrf_exempt
 def get_products(request):
@@ -261,10 +263,19 @@ def submit_review(request, product_id):
                 "updated_at": datetime.utcnow(),
             }
 
+            review = validate_and_convert_dates(review, ["created_at", "updated_at", "expires_at"])  # Convert dates to ISO format
+
+            # Validate the review data with ReviewSchema
+            try:
+                validated_review = review_schema.load(review)  # Validate the review data
+            except ValidationError as e:
+                messages.error(request, f"Review validation failed: {e.messages}")
+                return redirect("get_single_product", id=product_id)
+            
             # Append the review to the product's reviews
             reviews_collection.update_one(
                 {"product_id": product_id},
-                {"$push": {"reviews": review}},
+                {"$push": {"reviews": validated_review}},
                 upsert=True
             )
 

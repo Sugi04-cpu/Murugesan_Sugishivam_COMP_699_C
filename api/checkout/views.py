@@ -1,7 +1,8 @@
 from django.shortcuts import render, redirect
 from django.views.decorators.csrf import csrf_exempt
 from ..cart_management.cart_management_db import get_user_cart, get_cart_items
-from django.http import JsonResponse
+from ..orders.order_schema import OrderSchema
+from marshmallow import ValidationError
 import stripe
 from django.conf import settings
 from django.urls import reverse
@@ -11,6 +12,7 @@ from django.contrib import messages
 from api.mongoDb import get_collection
 from bson import ObjectId
 import uuid
+
 from datetime import datetime, timedelta
 
 # Initialize Stripe
@@ -118,27 +120,7 @@ def checkout(request):
         # Calculate shipping cost, free shipping for orders more than $50
         shipping_cost = 0 if cart_total > 50 else 10.00
 
-        # Handle coupon code
-        coupon_code = request.POST.get("coupon_code", "").strip().upper()
-        coupon_discount = 0
-        if coupon_code:
-            if coupon_code in active_coupons:
-                discount_value = active_coupons[coupon_code]
-                if discount_value > 0:
-                    if discount_value < 100:  # Percentage discount
-                        coupon_discount = cart_total * (discount_value / 100)
-                    else:  # Flat discount
-                        coupon_discount = discount_value
-                    messages.success(request, f"Coupon '{coupon_code}' applied successfully!")
-                else:
-                    # Handle free shipping coupon
-                    shipping_cost = 0
-                    messages.success(request, f"Coupon '{coupon_code}' applied successfully! Free shipping applied.")
-            else:
-                messages.error(request, "Invalid coupon code.")
-        
-        # Ensure discount does not exceed cart total
-        coupon_discount = min(coupon_discount, cart_total)
+        coupon_discount = apply_coupon(request, cart_total)
         cart_total -= coupon_discount
 
         context = {
@@ -209,8 +191,19 @@ def payment_success(request):
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
+
+        # Validate the order using OrderSchema
+        order_schema = OrderSchema()
+        try:
+            validated_order = order_schema.load(order)  # Validate the order data
+        except ValidationError as e:
+            print(f"Order validation error: {e.messages}")
+            messages.error(request, "Failed to process the order. Please try again.")
+            return redirect('checkout')
+
+        # Insert the validated order into the database
         orders_collection = get_collection("orders")
-        orders_collection.insert_one(order)
+        orders_collection.insert_one(validated_order)
 
         # Clear the cart after successful payment
         cart_items_collection = get_collection("cart_items")
@@ -293,3 +286,42 @@ def process_payment(request):
     except Exception as e:
         messages.error(request, "An unexpected error occurred. Please try again.")
         return redirect('checkout')
+
+def apply_coupon(request, cart_total):
+    """
+    Apply a coupon to the cart total.
+    """
+    try:
+        # Retrieve coupons from the database
+        coupons_collection = get_collection("coupons")
+        active_coupons = {
+            coupon["code"]: coupon["discount_percentage"]
+            for coupon in coupons_collection.find({"is_active": True})
+        }
+
+        # Handle coupon code
+        coupon_code = request.POST.get("coupon_code", "").strip().upper()
+        coupon_discount = 0
+        if coupon_code:
+            if coupon_code in active_coupons:
+                discount_value = active_coupons[coupon_code]
+                if discount_value > 0:
+                    if discount_value < 100:  # Percentage discount
+                        coupon_discount = cart_total * (discount_value / 100)
+                    else:  # Flat discount
+                        coupon_discount = discount_value
+                    messages.success(request, f"Coupon '{coupon_code}' applied successfully!")
+                else:
+                    # Handle free shipping coupon
+                    messages.success(request, f"Coupon '{coupon_code}' applied successfully! Free shipping applied.")
+            else:
+                messages.error(request, "Invalid coupon code.")
+        
+        # Ensure discount does not exceed cart total
+        coupon_discount = min(coupon_discount, cart_total)
+        return coupon_discount
+
+    except Exception as e:
+        print(f"Error in apply_coupon: {str(e)}")
+        messages.error(request, "An error occurred while applying the coupon.")
+        return 0

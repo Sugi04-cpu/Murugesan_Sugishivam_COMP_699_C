@@ -14,7 +14,7 @@ class ObjectIdField(fields.Field):
 
 # Address Schema (Only for Customers)
 class AddressSchema(Schema):
-
+    user_id = ObjectIdField(required=True)  # Reference to the user's _id in the users collection
     type = fields.Str(required=True)
     street = fields.Str(required=True)
     city = fields.Str(required=True)
