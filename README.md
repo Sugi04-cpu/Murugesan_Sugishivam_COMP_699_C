@@ -7,8 +7,8 @@
 
 ```sh
 # 1. Clone the repository
-git clone https://github.com/yourusername/your-django-project.git
-cd your-django-project
+git clone https://github.com/Sugi04-cpu/Murugesan_Sugishivam_COMP_699_C
+cd Murugesan_Sugishivam_COMP_699_C
 
 # 2. Create and activate a virtual environment
 python -m venv env
@@ -18,7 +18,7 @@ source env/bin/activate        # On Windows: env\Scripts\activate
 pip install -r requirements.txt
 
 # 4. Apply database migrations
-python manage.py migrate
+python manage.py migrate # Not necessary for this project as we are using MongoDB 
 
 # 5. (Optional) Create a superuser to access the admin panel
 python manage.py createsuperuser
