@@ -20,7 +20,6 @@ class TestProductSchema(unittest.TestCase):
             "image_url": "https://example.com/product.jpg",
             "availability": "In Stock",
         }
-
     def test_valid_product(self):
         schema = ProductSchema()
         result = schema.load(self.valid_product_data)
@@ -33,7 +32,6 @@ class TestProductSchema(unittest.TestCase):
         del invalid_data["name"]  # Missing required field
         with self.assertRaises(ValidationError):
             schema.load(invalid_data)
-
     def test_invalid_price(self):
         schema = ProductSchema()
         invalid_data = self.valid_product_data.copy()

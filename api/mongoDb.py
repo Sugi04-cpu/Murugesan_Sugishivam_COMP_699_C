@@ -1,11 +1,12 @@
 from pymongo import MongoClient
 from decouple import config
 
+# Establish MongoDB connection using settings
+client = MongoClient(config("MONGODB_URI"))
+db = client[config("MONGODB_NAME")]
+
+
 def get_collection(collection_name):
-    """
-    Get a MongoDB collection.
-    """
-    with MongoClient(config("MONGODB_URI")) as client:  # Use a context manager
-        db = client[config("MONGODB_DATABASE")]
-        return db[collection_name]
+    
+    return db[collection_name]
 
