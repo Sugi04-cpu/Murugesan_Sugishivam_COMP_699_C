@@ -3,6 +3,8 @@
 {% block title %}Create Product{% endblock %}
 
 {% block content %}
+{% load static %}
+{% include "includes/messages.html" %}
 <div class="container mt-6 mb-5">
     <h1 class="text-center text-primary mb-4">Create Product</h1>
     {% if message %}

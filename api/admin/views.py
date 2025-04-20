@@ -129,6 +129,8 @@ def view_refund_requests(request):
         if not request.user_data or request.user_data.get("role") != "admin":
             return render(request, "error.html", {"error": "Access denied. Admin privileges required."})
 
+        user = None
+
         if request.method == "POST":
             refund_id = request.POST.get("refund_id")
             action = request.POST.get("action")
@@ -146,13 +148,19 @@ def view_refund_requests(request):
 
             return redirect("view_refund_requests")
 
+      
         # Fetch all refund requests
+       
         refund_requests = list(refund_requests_collection.find())
         for refund in refund_requests:
             refund["id"] = str(refund["_id"])
+            user = users_collection.find_one({"_id": ObjectId(refund["user_id"])})
+            refund["user_name"] = user["name"] if user else "Unknown User"
+            refund["amount"] = refund.get("amount", 0)
+            refund["requested_at"] = refund.get("requested_at", datetime.utcnow())
 
         return render(request, "admin/refund_requests.html", {
-            "refund_requests": refund_requests
+            "refund_requests": refund_requests,
         })
 
     except Exception as e:
@@ -169,8 +177,6 @@ def moderate_reviews(request):
             # Handle review approval, rejection, or deletion
             review_id = request.POST.get("review_id")
             action = request.POST.get("action")  
-            
-            print(review_id)
 
             if review_id and ObjectId.is_valid(review_id):
                 # Fetch the review by its ID
@@ -191,7 +197,6 @@ def moderate_reviews(request):
                     status = "approved" if action == "approve" else "rejected"
         
                     review_document = reviews_collection.find_one({"reviews.id": ObjectId(review_id)})
-                    print(review_document)
                     reviews_collection.update_one(
                     {"reviews.id": ObjectId(review_id)},
                     {"$set": {
@@ -204,15 +209,19 @@ def moderate_reviews(request):
 
         # Fetch all reviews
         reviews = list(reviews_collection.find())
-        
+        total_reviews = 0
 
         for review in reviews:
             review["id"] = str(review["_id"])  # Convert ObjectId to string
             product = products_collection.find_one({"_id": ObjectId(review["product_id"])})
             review["product_name"] = product["name"] if product else "Unknown Product"
+            
+            if "reviews" in review and isinstance(review["reviews"], list):
+                total_reviews += len(review["reviews"])
         
         return render(request, "admin/reviews.html", {
-            "reviews": reviews
+            "reviews": reviews,
+            "total_reviews": total_reviews
         })
         
 

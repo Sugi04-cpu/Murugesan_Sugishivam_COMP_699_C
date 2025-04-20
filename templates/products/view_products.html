@@ -54,7 +54,7 @@
                                 Profile
                             </a>
                             {% if request.user_data.role == 'admin' %}
-                                <a href="{% url 'render_users_admin' %}" class="btn btn-outline-dark ms-2">
+                                <a href="{% url 'render_admin_panel' %}" class="btn btn-outline-dark ms-2">
                                     <i class="bi-gear-fill me-1"></i>
                                     Admin Panel
                                 </a>
@@ -143,8 +143,8 @@
 
                                         {% if request.user_data %}
                                             <!-- Authenticated User Content -->
-                                            {% if product.discount %}
-                                                {% with discounted_price=product.price|multiply:0.01|multiply:product.discount|subtract:product.price|abs %}
+                                            {% if product.attributes.discount %}
+                                                {% with discounted_price=product.price|multiply:0.01|multiply:product.attributes.discount|subtract:product.price|abs %}
                                                     <span class="text-decoration-line-through text-muted">${{ product.price }}</span>
                                                     <span class="text-primary">${{ discounted_price|floatformat:2 }}</span>
                                                 {% endwith %}

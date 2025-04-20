@@ -17,7 +17,7 @@ class ObjectIdField(fields.Field):
 # Cart Schema
 class CartSchema(Schema):
     _id = ObjectIdField(required=False)
-    session_id = fields.Str(required=True)
+    session_id = fields.Str(required=False)
     user_id = ObjectIdField(required=False)
     items = fields.List(fields.Dict(), missing=[])
     created_at = fields.DateTime(required=False, missing=datetime.utcnow)

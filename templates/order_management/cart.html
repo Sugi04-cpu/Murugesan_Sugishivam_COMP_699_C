@@ -121,7 +121,7 @@
                                                             name="action" 
                                                             value="decrease" 
                                                             class="btn btn-outline-secondary btn-sm"
-                                                            {% if item.quantity <= item.product.stock %}disabled{% endif %}>
+                                                        {% if item.quantity <= 1 %}disabled{% endif %}>
                                                         <i class="bi bi-dash"></i>
                                                     </button>
                                                     <span class="mx-3">{{ item.quantity }}</span>

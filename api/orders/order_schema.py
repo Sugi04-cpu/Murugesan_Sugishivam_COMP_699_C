@@ -46,6 +46,7 @@ class RefundRequestSchema(Schema):
         required=True,
         validate=lambda x: x in ["Pending", "Approved", "Rejected"]
     )  # Refund request status
+    amount = fields.Float(required=True)  # Amount to be refunded
     requested_at = fields.DateTime(required=False)  # Timestamp when the refund was requested
     updated_at = fields.DateTime(required=False)  # Timestamp when the refund status was last updated
 

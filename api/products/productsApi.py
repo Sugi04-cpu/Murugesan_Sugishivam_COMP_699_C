@@ -3,7 +3,7 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
 from marshmallow import ValidationError
-from .schema import ProductSchema, ReviewSchema
+from .schema import ProductSchema, IndividualReviewSchema
 from api.mongoDb import get_collection
 import json
 from bson import ObjectId
@@ -15,7 +15,7 @@ from ..utils.date_utils import validate_and_convert_dates
 product_collection = get_collection("products")
 reviews_collection = get_collection("reviews")
 product_schema = ProductSchema()
-review_schema = ReviewSchema()
+review_schema = IndividualReviewSchema()
 
 @csrf_exempt
 def get_products(request):
@@ -263,7 +263,7 @@ def submit_review(request, product_id):
                 "updated_at": datetime.utcnow(),
             }
 
-            review = validate_and_convert_dates(review, ["created_at", "updated_at", "expires_at"])  # Convert dates to ISO format
+            review = validate_and_convert_dates(review, ["created_at", "updated_at"])  # Convert dates to ISO format
 
             # Validate the review data with ReviewSchema
             try:

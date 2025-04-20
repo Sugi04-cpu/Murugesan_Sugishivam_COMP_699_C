@@ -44,18 +44,11 @@ This link expires in {timeout} minutes.''',
 @csrf_exempt
 def checkout(request):
     try:
-        # Retrieve coupons from the database
-        coupons_collection = get_collection("coupons")
-        active_coupons = {
-            coupon["code"]: coupon["discount_percentage"]
-            for coupon in coupons_collection.find({"is_active": True})
-        }
-
         # Check for user_data in request or session
         session_id = request.GET.get('session_id')
         if session_id:
             checkout_session = stripe.checkout.Session.retrieve(session_id)
-            user_id = checkout_session.get("client_reference_id")        
+            user_id = checkout_session.get("client_reference_id")
 
         user_data = getattr(request,  'user_data', None) or request.session.get('user_data') or {"user_id": user_id}
 
@@ -121,7 +114,7 @@ def checkout(request):
         shipping_cost = 0 if cart_total > 50 else 10.00
 
         coupon_discount = apply_coupon(request, cart_total)
-        cart_total -= coupon_discount
+        discounted_total = cart_total - coupon_discount
 
         context = {
             "cart_items": cart_items,
@@ -131,9 +124,10 @@ def checkout(request):
             "stripe_public_key": settings.STRIPE_PUBLIC_KEY,
             "user": user,
             "coupon_discount": round(coupon_discount, 2),
+            "discounted_total": round(discounted_total, 2),
         }
 
-        return render(request, 'order_management/cart.html', context)
+        return render(request, 'order_management/checkout.html', context)
 
     except Exception as e:
         print(f"Error in checkout: {str(e)}")
@@ -176,18 +170,17 @@ def payment_success(request):
         # Create an order in the orders collection
         order = {
             "user_id": user["_id"],
-            "order_status": "Pending",
+            "status": "Pending",
             "items": [
                 {
                     "product_id": item["product"]["_id"],
                     "name": item["product"]["name"],
                     "quantity": item["quantity"],
                     "price": item["product"]["price"],
-                    "subtotal": item["subtotal"]
                 }
                 for item in cart_items
             ],
-            "total": cart_total,
+            "total_price": cart_total,
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
@@ -294,8 +287,9 @@ def apply_coupon(request, cart_total):
     try:
         # Retrieve coupons from the database
         coupons_collection = get_collection("coupons")
+
         active_coupons = {
-            coupon["code"]: coupon["discount_percentage"]
+            coupon["code"]: coupon["discount"]
             for coupon in coupons_collection.find({"is_active": True})
         }
 

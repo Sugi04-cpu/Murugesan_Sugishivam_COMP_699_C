@@ -1,5 +1,4 @@
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib import messages
 from .cart_management_db import (
@@ -16,7 +15,7 @@ import json
 from marshmallow import ValidationError
 from datetime import datetime, timedelta
 from ..mongoDb import get_collection
-from .cart_schema import CartSchema  # Import the schema for validation
+from .cart_schema import CartSchema
 from ..utils.date_utils import validate_and_convert_dates
 
 product_collection = get_collection("products")
@@ -25,44 +24,23 @@ user_collection = get_collection("users")
 cart_schema = CartSchema()
 
 def handle_response(request, context=None, message=None, status=200, redirect_url=None):
-    """
-    Utility function to handle both JSON responses and Django messages.
-    - If the request is JSON, it returns a JsonResponse.
-    - If the request is not JSON, it uses Django messages and optionally redirects.
-    """
-    if request.content_type == "application/json":
-        response_data = {"message": message}
-        if context:
-            response_data.update(context)
-        return JsonResponse(response_data, status=status)
+    if status >= 400:
+        messages.error(request, message)
     else:
-        if status >= 400:
-            messages.error(request, message)
-        else:
-            messages.success(request, message)
-        
-        # Redirect if a redirect URL is provided
-        if redirect_url:
-            return redirect(redirect_url)
-        return None
+        messages.success(request, message)
+    
+    if redirect_url:
+        return redirect(redirect_url)
+    return None
 
 @csrf_exempt
 def view_cart(request):
-    """View cart contents"""
     try:
-        # Get cart based on user authentication
-        if request.user_data:
-            cart = get_user_cart(user_id=request.user_data["user_id"])
-        else:
-            cart = get_user_cart(session_id=request.session.session_key)
-
+        cart = get_user_cart(user_id=request.user_data["user_id"]) if request.user_data else get_user_cart(session_id=request.session.session_key)
         if not cart:
             return render(request, 'order_management/cart.html', {
-                "cart_items": [],
-                "cart_total": 0,
-                "cart_count": 0,
-                "discount_amount": 0,
-                "total_with_discount": 0,
+                "cart_items": [], "cart_total": 0, "cart_count": 0,
+                "discount_amount": 0, "total_with_discount": 0,
                 "remaining_for_free_shipping": 50,
             })
 
@@ -70,75 +48,45 @@ def view_cart(request):
             if cart.get("expires_at"):
                 expires_at = cart["expires_at"]
                 current_time = datetime.utcnow()
-
                 if current_time >= expires_at:
-                    # Cart has expired
                     clear_cart(cart["_id"])
                     messages.warning(request, "Your cart has expired. Items have been cleared.")
                     return render(request, 'order_management/cart.html', {
-                        "cart_items": [],
-                        "cart_total": 0,
-                        "cart_count": 0,
-                        "discount_amount": 0,
-                        "total_with_discount": 0,
+                        "cart_items": [], "cart_total": 0, "cart_count": 0,
+                        "discount_amount": 0, "total_with_discount": 0,
                         "remaining_for_free_shipping": 50,
                     })
                 else:
-                    # Calculate time remaining
-                    time_remaining = expires_at - current_time
-                    hours_remaining = time_remaining.total_seconds() / 3600
-
-                    if hours_remaining < 4:  # Warning when less than 4 hours left
-                        messages.warning(
-                            request,
-                            f"Your cart will expire in {int(hours_remaining)} hours. Please sign up or log in to keep your items."
-                        )
+                    hours_remaining = (expires_at - current_time).total_seconds() / 3600
+                    if hours_remaining < 4:
+                        messages.warning(request, f"Your cart will expire in {int(hours_remaining)} hours.")
                     else:
-                        messages.info(
-                            request,
-                            "Guest carts expire after 24 hours. Please sign up or log in to keep your items permanently."
-                        )
+                        messages.info(request, "Guest carts expire after 24 hours.")
 
-        # Get cart items with product details
         cart_items = get_cart_items(cart["_id"])
-
-        # Calculate totals and apply discounts
         cart_total = 0
-        cart_count = 0
         discount = 0
-        total_with_discount = 0
-
         for item in cart_items:
             product = item["product"]
-            quantity = item["quantity"]
+            item['product']['id'] = str(product['_id'])
             price = float(product.get("price", 0))
-
-            # Convert _id to id for template access
-            item['product']['id'] = str(item['product']['_id'])
-            
-            # Apply discount if available
             if product.get("discount"):
-                discount = float(product["discount"]) / 100
-                price = price * (1 - discount)
-
-            item["subtotal"] = price * quantity
+                price *= (1 - float(product["discount"]) / 100)
+            item["subtotal"] = price * item["quantity"]
             cart_total += item["subtotal"]
-            cart_count = len(cart_items)
 
+        total_with_discount = cart_total
         if cart_total > 100:
-            discount = cart_total * 0.1  # 10% discount for orders over $100
-            total_with_discount = cart_total - discount
+            discount = cart_total * 0.1
+            total_with_discount -= discount
 
-        free_shipping = 50
-        remaining_amount = max(0, free_shipping - cart_total)  # Remaining amount eligible for free shipping
-        
         context = {
             "cart_items": cart_items,
             "cart_total": round(cart_total, 2),
-            "cart_count": cart_count,
+            "cart_count": len(cart_items),
             "discount_amount": round(discount, 2),
             "total_with_discount": round(total_with_discount, 2),
-            "remaining_for_free_shipping": round(remaining_amount, 2),
+            "remaining_for_free_shipping": round(max(0, 50 - cart_total), 2),
         }
         return render(request, 'order_management/cart.html', context)
 
@@ -147,362 +95,136 @@ def view_cart(request):
 
 @csrf_exempt
 def add_to_cart(request, product_id):
-    """Add item to cart"""
     if request.method != "POST":
         messages.error(request, "Method not allowed.")
         return redirect('view_cart')
 
     try:
-        # 1. Validate product ID
         try:
             product_object_id = ObjectId(product_id)
         except errors.InvalidId:
-            return handle_response(request, None, "Invalid product ID.", 400)
+            return handle_response(request, None, "Invalid product ID.", 400, "view_cart")
 
-        # 2. Validate product exists and check stock
         product = product_collection.find_one({"_id": product_object_id})
         if not product:
-            return handle_response(request, None, "Product not found.", 404)
+            return handle_response(request, None, "Product not found.", 404, "view_cart")
 
         if product.get('stock', 0) <= 0:
-            return handle_response(request, None, "Product is out of stock.", 400)
+            return handle_response(request, None, "Product is out of stock.", 400, "view_cart")
 
-        # 3. Get or create cart
-        try:
-            if hasattr(request, 'user_data') and request.user_data:
-                user_id = request.user_data.get('user_id')
-                if not user_id:
-                    return handle_response(request, None, "User not authenticated.", 401)
+        if request.user_data:
+            user_id = request.user_data.get('user_id')
+            cart = get_user_cart(user_id=user_id) or create_cart(user_id=user_id) or get_user_cart(user_id=user_id)
+        else:
+            if not request.session.session_key:
+                request.session.create()
+            cart = get_user_cart(session_id=request.session.session_key) or create_cart(session_id=request.session.session_key) or get_user_cart(session_id=request.session.session_key)
 
-                cart = get_user_cart(user_id=user_id)
-                if not cart:
-                    create_cart(user_id=user_id)
-                    cart = get_user_cart(user_id=user_id)
-            else:
-                # Handle guest cart
-                if not request.session.session_key:
-                    request.session.create()
-                cart = get_user_cart(session_id=request.session.session_key)
-                if not cart:
-                    create_cart(session_id=request.session.session_key)
-                    cart = get_user_cart(session_id=request.session.session_key)
+        if not cart:
+            raise Exception("Failed to create or retrieve cart.")
 
-            if not cart:
-                raise Exception("Failed to create or retrieve cart.")
+        quantity = 1
+        form_quantity = request.POST.get("quantity")
+        if form_quantity:
+            quantity = int(form_quantity)
 
-        except Exception as e:
-            return handle_response(request, None, f"Cart creation failed: {str(e)}", 500)
+        if quantity <= 0:
+            return handle_response(request, None, "Quantity must be positive.", 400, "view_cart")
+        if quantity > product.get('stock', 0):
+            return handle_response(request, None, f"Only {product.get('stock')} items available.", 400, "view_cart")
 
-        # 4. Parse and validate quantity
-        try:
-            quantity = 1
-            if request.content_type == "application/json":
-                data = json.loads(request.body)
-                quantity = int(data.get("quantity", 1))
-            else:
-                # Handle form data
-                form_quantity = request.POST.get("quantity")
-                if form_quantity:
-                    quantity = int(form_quantity)
-
-            # Validate quantity value
-            if quantity <= 0:
-                return handle_response(request, None, "Quantity must be positive.", 400)
-
-            if quantity > product.get('stock', 0):
-                return handle_response(
-                    request,
-                    None,
-                    f"Only {product.get('stock')} items available.",
-                    400
-                )
-
-        except (json.JSONDecodeError, ValueError):
-            return handle_response(request, None, "Invalid quantity format.", 400)
-
-         # Validate and convert datetime fields
         cart = validate_and_convert_dates(cart, ["created_at", "updated_at", "expires_at"])
-        
-        # 5. Validate cart data using CartSchema
+
         try:
-            cart_schema.load(cart)  # Validate the cart data
+            cart_schema.load(cart)
         except ValidationError as e:
-            return handle_response(request, None, f"Cart validation failed: {e.messages}", 400)
+            return handle_response(request, None, f"Cart validation failed: {e.messages}", 400, "view_cart")
 
-        # 6. Check existing cart item and update total quantity
         current_cart_items = get_cart_items(cart["_id"])
-        existing_item = next(
-            (item for item in current_cart_items if str(item["product"]["_id"]) == product_id),
-            None
-        )
+        existing_item = next((item for item in current_cart_items if str(item["product"]["_id"]) == product_id), None)
 
-        if existing_item:
-            new_quantity = existing_item["quantity"] + quantity
-            if new_quantity > product.get('stock', 0):
-                return handle_response(
-                    request,
-                    None,
-                    f"Cannot add {quantity} more items. Only {product.get('stock') - existing_item['quantity']} available.",
-                    400
-                )
+        if existing_item and (existing_item["quantity"] + quantity) > product.get('stock', 0):
+            return handle_response(request, None, f"Only {product.get('stock') - existing_item['quantity']} more items available.", 400, "view_cart")
 
-        # 7. Update cart with error handling
-        try:
-            update_cart_item(str(cart["_id"]), str(product_id), quantity)
-        except Exception as e:
-            return handle_response(request, None, f"Failed to update cart: {str(e)}", 500)
+        update_cart_item(str(cart["_id"]), str(product_id), quantity)
 
-        # 8. Return success response
-        if request.content_type == "application/json":
-            return JsonResponse({
-                "message": "Item added to cart successfully.",
-                "cart_count": quantity,
-            }, status=200)
-
-        return redirect("view_cart")
+        return handle_response(request, None, "Item added to cart successfully.", 200, "view_cart")
 
     except Exception as e:
-        return handle_response(request, None, str(e), 500)
+        return handle_response(request, None, str(e), 500, "view_cart")
 
 @csrf_exempt
 def update_cart(request, product_id):
-  
-    print(product_id)  # Debug print to check the request data
     if request.method != "POST":
-        return handle_response(request, None, "Method not allowed", 405)
+        return handle_response(request, None, "Method not allowed", 405, "view_cart")
 
     try:
-        # Get cart
-        if request.user_data:
-            cart = get_user_cart(user_id=request.user_data["user_id"])
-        else:
-            cart = get_user_cart(session_id=request.session.session_key)
-
+        cart = get_user_cart(user_id=request.user_data["user_id"]) if request.user_data else get_user_cart(session_id=request.session.session_key)
         if not cart:
-            return handle_response(request, None, "Cart not found", 404)
+            return handle_response(request, None, "Cart not found", 404, "view_cart")
 
-        # Get action from request
         action = request.POST.get("action")
-        if request.content_type == "application/json":
-            data = json.loads(request.body)
-            action = data.get("action")
-
         if action not in ["increase", "decrease", "remove"]:
-            return handle_response(request, None, "Invalid action", 400)
+            return handle_response(request, None, "Invalid action", 400, "view_cart")
 
-        # Get current quantity
         cart_items = get_cart_items(cart["_id"])
-        
-
-        current_item = next((item for item in cart_items 
-                             if str(item["product"]["_id"]) == product_id), None)
-       
+        current_item = next((item for item in cart_items if str(item["product"]["_id"]) == product_id), None)
         if not current_item:
-            return handle_response(request, None, "Item not found in cart", 404)
-       
-        # Check stock before increasing
+            return handle_response(request, None, "Item not found in cart", 404, "view_cart")
+
         if action == "increase":
-            # Check stock before increasing
             product = product_collection.find_one({"_id": ObjectId(product_id)})
-            print(product)
             if current_item["quantity"] >= product.get("stock", 0):
-                return handle_response(request, None, "Not enough stock available", 400)
-            new_quantity = current_item["quantity"] + 1   
-        else:  # decrease
-            new_quantity = max(1, current_item["quantity"] - 1)
+                return handle_response(request, None, "Not enough stock available", 400, "view_cart")
             
-        
-         # Update cart with new quantity
-        update_cart_item(str(cart["_id"]), str(product_id), new_quantity)
+            new_quantity = current_item["quantity"] + 1
+        elif action == "decrease":
+            new_quantity = max(1, current_item["quantity"] - 1)
 
-        # Get updated cart data
-        updated_cart_items = get_cart_items(cart["_id"])
-        cart_total = sum(item["subtotal"] for item in updated_cart_items)
-        cart_count = sum(item["quantity"] for item in updated_cart_items)
+        else:
+            new_quantity = 0
 
-        response = redirect("view_cart")
+        update_cart_item(str(cart["_id"]), str(product_id), new_quantity, "remove" if action == "remove" else None)
 
-        if request.content_type == "application/json":
-            return JsonResponse({
-                "status": 200,
-                "cart_total": round(cart_total, 2),
-                "cart_count": cart_count
-            })
-
-        # Render the cart view with updated data
-        return response
+        messages.success(request, "Cart updated successfully")
+        return redirect("view_cart")
 
     except Exception as e:
-        return handle_response(request, None, str(e), 500)
+        return handle_response(request, None, str(e), 500, "view_cart")
+
 @csrf_exempt
 def clear_cart_view(request):
-    """Clear all items from cart"""
     if request.method != "POST":
-        return handle_response(request, None, "Method not allowed", 405, redirect_url="view_cart")
+        return handle_response(request, None, "Method not allowed", 405, "view_cart")
 
     try:
-        # Get cart
-        if request.user_data:
-            cart = get_user_cart(user_id=request.user_data["user_id"])
-        else:
-            cart = get_user_cart(session_id=request.session.session_key)
-
+        cart = get_user_cart(user_id=request.user_data["user_id"]) if request.user_data else get_user_cart(session_id=request.session.session_key)
         if not cart:
-            return handle_response(request, None, "Cart not found", 404, redirect_url="view_cart")
+            return handle_response(request, None, "Cart not found", 404, "view_cart")
 
         clear_cart(cart["_id"])
-        return handle_response(request, None, "Cart cleared successfully", 200, redirect_url="view_cart")
+        return handle_response(request, None, "Cart cleared successfully", 200, "view_cart")
 
     except Exception as e:
-        return handle_response(request, None, f"Error clearing cart: {str(e)}", 500, redirect_url="view_cart")
+        return handle_response(request, None, f"Error clearing cart: {str(e)}", 500, "view_cart")
 
 @csrf_exempt
 def remove_from_cart(request, product_id):
-    """Remove specific item from cart"""
     if request.method != "POST":
-        return handle_response(request, None, "Method not allowed", 405, redirect_url="view_cart")
+        return handle_response(request, None, "Method not allowed", 405, "view_cart")
 
     try:
-        # Get cart
-        if request.user_data:
-            cart = get_user_cart(user_id=request.user_data["user_id"])
-        else:
-            cart = get_user_cart(session_id=request.session.session_key)
-
+        cart = get_user_cart(user_id=request.user_data["user_id"]) if request.user_data else get_user_cart(session_id=request.session.session_key)
         if not cart:
-            return handle_response(request, None, "Cart not found", 404, redirect_url="view_cart")
+            return handle_response(request, None, "Cart not found", 404, "view_cart")
 
-        # Convert product_id to string for comparison
         product_id_str = str(product_id)
-
-        # Verify item exists in cart
         cart_items = get_cart_items(cart["_id"])
-        item_exists = any(str(item["product"]["_id"]) == product_id_str for item in cart_items)
+        if not any(str(item["product"]["_id"]) == product_id_str for item in cart_items):
+            return handle_response(request, None, "Item not found in cart", 404, "view_cart")
 
-        if not item_exists:
-            return handle_response(request, None, "Item not found in cart", 404, redirect_url="view_cart")
-
-        # Remove the specific item
         update_cart_item(str(cart["_id"]), product_id_str, 0, "remove")
-        return handle_response(request, None, "Item removed from cart successfully", 200, redirect_url="view_cart")
+        return handle_response(request, None, "Item removed from cart successfully", 200, "view_cart")
 
     except Exception as e:
-        return handle_response(request, None, f"Error removing item from cart: {str(e)}", 500, redirect_url="view_cart")
-
-def send_cart_reminder_emails():
-    try:
-        
-        # Find carts inactive for 24 hours
-        inactive_carts = carts_collection.find({
-            "updated_at": {"$lte": datetime.utcnow() - timedelta(hours=24)},
-            "reminder_sent": {"$ne": True}  # Ensure we don't send multiple reminders
-        })
-        
-        for cart in inactive_carts:
-
-            if "user_id" not in cart or not ObjectId.is_valid(cart["user_id"]):
-                print(f"Invalid or missing user_id in cart: {cart['_id']}")
-                continue
-
-            user = user_collection.find_one({"_id": ObjectId(cart["user_id"])})
-
-            cart_items = get_cart_items(cart["_id"])
-            if not cart_items:
-                print(f"No items found in cart: {cart['_id']}")
-                continue
-
-            # Prepare cart details for the email
-            cart_details = ""
-            cart_total = 0
-            for item in cart_items:
-                product = product_collection.find_one({"_id": ObjectId(item["product"]["_id"])})
-                if product:
-                    product_name = product.get("name", "Unknown Product")
-                    quantity = item.get("quantity", 0)
-                    subtotal = item.get("subtotal", 0)
-                    cart_details += f"- {product_name} (x{quantity}): ${subtotal:.2f}\n"
-                    cart_total += subtotal
-            
-            cart_link = config("SITE_URL") + "/cart"
-
-            if user and user.get("email"):
-
-                # Send reminder email
-                send_mail(
-                    subject="Don't forget your cart!",
-                    message=(
-                    f"Hi {user['name']},\n\n"
-                    "You left some items in your cart. Here's what you have:\n\n"
-                    f"{cart_details}\n"
-                    f"Total: ${cart_total:.2f}\n\n"
-                    f"Click here to view your cart: {cart_link}\n\n"
-                    "Complete your purchase now before your items run out!"
-                ),
-                    from_email=config("DEFAULT_FROM_EMAIL"),
-                    recipient_list=[user["email"]],
-                    fail_silently=False,
-                    
-                )
-
-                # Mark the cart as reminded
-                carts_collection.update_one(
-                    {"_id": cart["_id"]},
-                    {"$set": {"reminder_sent": True}}
-                )
-
-        print("Cart reminder emails sent successfully.")
-
-    except Exception as e:
-        print(f"Error sending cart reminder emails: {str(e)}")
-
-def notify_stock():
-    try:
-        carts = carts_collection.find()
-
-        for cart in carts:
-            if "user_id" not in cart or not ObjectId.is_valid(cart["user_id"]):
-                print(f"Invalid or missing user_id in cart: {cart.get('_id')}")
-                continue
-
-            # Fetch the user associated with the cart
-            user = user_collection.find_one({"_id": ObjectId(cart["user_id"])})
-            if not user or not user.get("email"):
-                print(f"User not found or missing email for cart: {cart.get('_id')}")
-                continue
-
-            # Fetch cart items
-            cart_items = get_cart_items(cart["_id"])
-            if not cart_items:
-                print(f"No items found in cart: {cart.get('_id')}")
-                continue
-
-            # Check stock status for each product in the cart
-            out_of_stock_products = []
-            for item in cart_items:
-                product = product_collection.find_one({"_id": ObjectId(item["product"]["_id"])})
-                if product and product.get("stock", 0) <= 0:
-                    out_of_stock_products.append(product.get("name", "Unknown Product"))
-
-            # If there are out-of-stock products, send a notification email
-            cart_link = config("SITE_URL") + "/cart"
-            if out_of_stock_products:
-                product_list = "\n".join(f"- {product}" for product in out_of_stock_products)
-                send_mail(
-                    subject="Some items in your cart are out of stock",
-                    message=(
-                        f"Hi {user['name']},\n\n"
-                        "The following items in your cart are currently out of stock:\n\n"
-                        f"{product_list}\n\n"
-                        "Please visit your cart to update your items.\n\n"
-                        f"Click here to view your cart: {cart_link}\n\n"
-                        "Thank you for shopping with us!"
-                    ),
-                    from_email=config("DEFAULT_FROM_EMAIL"),
-                    recipient_list=[user["email"]],
-                    fail_silently=False,
-                )
-
-                print(f"Notification sent to {user['email']} for cart {cart['_id']}.")
-
-    except Exception as e:
-        print(f"Error notifying customers about out-of-stock products: {str(e)}")
+        return handle_response(request, None, f"Error removing item from cart: {str(e)}", 500, "view_cart")

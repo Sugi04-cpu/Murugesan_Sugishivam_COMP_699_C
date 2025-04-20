@@ -2,23 +2,26 @@ from datetime import datetime
 
 def validate_and_convert_dates(data, fields):
     """
-    Ensure that all specified datetime fields in the data are valid and properly formatted.
+    Ensure that specified datetime fields are ISO 8601 strings.
     
     Args:
         data (dict): The dictionary containing the fields to validate.
         fields (list): A list of field names to validate and convert.
 
     Returns:
-        dict: The updated dictionary with properly formatted datetime fields.
+        dict: The updated dictionary with datetime fields in ISO format.
     """
     for field in fields:
         if field in data:
-            if isinstance(data[field], str):
-                # Convert ISO 8601 string to datetime object
+            value = data[field]
+            if isinstance(value, datetime):
+                data[field] = value.isoformat()
+            elif isinstance(value, str):
                 try:
-                    data[field] = datetime.fromisoformat(data[field])
+                    # Validate the string can be parsed
+                    datetime.fromisoformat(value)
                 except ValueError:
-                    raise ValueError(f"Invalid datetime format for field '{field}': {data[field]}")
-            elif not isinstance(data[field], datetime):
+                    raise ValueError(f"Invalid ISO datetime string for field '{field}': {value}")
+            else:
                 raise ValueError(f"Field '{field}' must be a datetime object or ISO 8601 string.")
     return data

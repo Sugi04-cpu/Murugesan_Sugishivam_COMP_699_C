@@ -33,5 +33,7 @@ urlpatterns = [
     path('signup/', sign_up, name='sign_up'),
     path('profile/', include('api.users.urls')),
     path('cart/', include('api.cart_management.urls')),
-    path('checkout/', include('api.checkout.urls'))
+    path('checkout/', include('api.checkout.urls')),
+    path('admin/', include('api.admin.urls')),
+    path('orders/', include('api.orders.urls')),
 ]

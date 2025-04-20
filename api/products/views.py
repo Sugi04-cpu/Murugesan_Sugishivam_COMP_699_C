@@ -85,4 +85,5 @@ def render_products(request):
         return render(request, "products/view_products.html", context)
 
     except Exception as e:
+        print(f"Error in render_products: {str(e)}")
         return render(request, "error.html", {"error": str(e)})
