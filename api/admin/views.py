@@ -38,16 +38,16 @@ def render_users_admin(request):
             transformed_users.append(transformed_user)
 
         # Render the admin user management page
-        return render(request, "users/users.html", {
+        return render(request, "admin/users.html", {
             "users": transformed_users,
             "admin_name": request.user_data.get("email"),
         })
 
     except Exception as e:
         # Handle errors and render the error page
-        return render(request, "error.html", {
-            "error": f"An error occurred: {str(e)}"
-        })
+        print(f"Error in render_users_admin: {str(e)}")
+        messages.error(request, f"An error occurred: {str(e)}")
+        return render(request, "error.html")
 
 def render_admin_panel(request):
     """Render the admin panel."""

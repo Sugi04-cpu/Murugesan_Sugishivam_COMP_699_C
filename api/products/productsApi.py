@@ -28,6 +28,8 @@ def get_products(request):
             if category:
                 query["category"] = category
 
+            query["status"] = "active" # Only fetch active products
+
             sort_by = request.GET.get("sort_by", "name")
             order = 1 if request.GET.get("order", "asc") == "asc" else -1
 
@@ -89,6 +91,7 @@ def create_product(request):
                     "price": float(request.POST.get("price", 0)),
                     "category": request.POST.get("category"),
                     "tags": request.POST.getlist("tags"),
+                    "is_active": request.POST.get("is_active") == "on",  # Convert checkbox to boolean
                     "attributes": {
                         "brand": request.POST.get("brand"),
                         "color": request.POST.get("color"),
