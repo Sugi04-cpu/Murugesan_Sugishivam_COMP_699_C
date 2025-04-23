@@ -11,7 +11,7 @@ def render_products(request):
         selected_category = request.GET.get("category", "").strip()
 
          # Build the base filter
-        filter_query = {}
+        filter_query = {"is_active": True}
 
         # Add search filter
         if query:

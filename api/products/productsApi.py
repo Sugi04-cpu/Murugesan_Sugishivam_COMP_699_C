@@ -7,41 +7,41 @@ from ..utils.date_utils import validate_and_convert_dates
 product_schema = ProductSchema()
 review_schema = IndividualReviewSchema()
 
-@csrf_exempt
-def get_products(request):
-    """Fetch products with optional filtering and sorting."""
-    if request.method == "GET":
-        try:
-            # Handle query parameters for filtering/sorting
-            query = {}
-            category = request.GET.get("category")
-            if category:
-                query["category"] = category
+# @csrf_exempt
+# def get_products(request):
+#     """Fetch products with optional filtering and sorting."""
+#     if request.method == "GET":
+#         try:
+#             # Handle query parameters for filtering/sorting
+#             query = {}
+#             category = request.GET.get("category")
+#             if category:
+#                 query["category"] = category
 
-            query["status"] = "active" # Only fetch active products
+#             query["is_active"] = True # Only fetch active products
 
-            sort_by = request.GET.get("sort_by", "name")
-            order = 1 if request.GET.get("order", "asc") == "asc" else -1
+#             sort_by = request.GET.get("sort_by", "name")
+#             order = 1 if request.GET.get("order", "asc") == "asc" else -1
 
-            # Retrieve filtered/sorted products from MongoDB
-            products = list(products_collection.find(query).sort(sort_by, order))
+#             # Retrieve filtered/sorted products from MongoDB
+#             products = list(products_collection.find(query).sort(sort_by, order))
 
-            # Convert ObjectId to string for template usage
-            for product in products:
-                product["_id"] = str(product["_id"])
+#             # Convert ObjectId to string for template usage
+#             for product in products:
+#                 product["_id"] = str(product["_id"])
 
-            # Add a success message
-            messages.success(request, f"{len(products)} products fetched successfully.")
-            return redirect("render_products")  # Redirect to the products page
+#             # Add a success message
+#             messages.success(request, f"{len(products)} products fetched successfully.")
+#             return redirect("render_products")  # Redirect to the products page
 
-        except Exception as e:
-            # Add an error message
-            messages.error(request, f"Error fetching products: {str(e)}")
-            return redirect("render_products")  # Redirect to the products page
+#         except Exception as e:
+#             # Add an error message
+#             messages.error(request, f"Error fetching products: {str(e)}")
+#             return redirect("render_products")  # Redirect to the products page
 
-    # Add an error message for invalid HTTP methods
-    messages.error(request, "Invalid HTTP method.")
-    return redirect("render_products")
+#     # Add an error message for invalid HTTP methods
+#     messages.error(request, "Invalid HTTP method.")
+#     return redirect("render_products")
 
 @csrf_exempt
 def get_single_product(request, id):
@@ -111,7 +111,7 @@ def create_product(request):
                 if existing_product:
                     error_message = f"Product '{validated_product['name']}' with these attributes already exists"
                     if request.content_type != "application/json":
-                        messages.error(request, error_message)
+                        messages.error(error_message)
                         return render(request, "products/create_product.html")
                     return JsonResponse({"error": error_message}, status=400)
 
@@ -120,7 +120,7 @@ def create_product(request):
             if not valid_products:
                 error_message = "No valid products to insert"
                 if request.content_type != "application/json":
-                    messages.error(request, error_message)
+                    messages.error(error_message)
                     return render(request, "products/create_product.html")
                 return JsonResponse({"error": error_message}, status=400)
 
@@ -128,14 +128,14 @@ def create_product(request):
 
             success_message = f"{len(valid_products)} Product(s) created successfully"
             if request.content_type != "application/json":
-                messages.success(request, success_message)
+                messages.success(success_message)
                 return render(request, "products/create_product.html")
             return JsonResponse({"message": success_message}, status=201)
 
         except json.JSONDecodeError:
             error_message = "Invalid JSON"
             if request.content_type != "application/json":
-                messages.error(request, error_message)
+                messages.error(error_message)
                 return render(request, "products/create_product.html")
             return JsonResponse({"error": error_message}, status=400)
         except Exception as e:
@@ -150,56 +150,73 @@ def create_product(request):
         return render(request, "products/create_product.html")
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
+
 @csrf_exempt
 def delete_product(request, product_id):
-    if request.method == "DELETE":
+    if request.method == 'POST' and request.POST.get('_method') == 'DELETE':
         try:
             if not ObjectId.is_valid(product_id):
                 messages.error(request, "Invalid product ID format")
-                return redirect('render_products')
+                return redirect('manage_products')
 
             # Find the product by ID
             product = products_collection.find_one({"_id": ObjectId(product_id)})
 
             if not product:
                 messages.error(request, "Product not found")
-                return redirect('render_products')
-
+                return redirect('manage_products')
             # Delete the product
             result = products_collection.delete_one({"_id": ObjectId(product_id)})
 
             if result.deleted_count == 0:
                 messages.error(request, "Failed to delete product")
-                return redirect('render_products')
+                return redirect('manage_products')
 
-            messages.success(request, f"Product with ID {product_id} deleted successfully")
-            return redirect('render_products')
+            messages.success(request, f"Product {product['name']} deleted successfully")
+            return redirect('manage_products')
 
         except Exception as e:
             messages.error(request, f"Error deleting product: {str(e)}")
-            return redirect('render_products')
+            return redirect('manage_products')
 
     messages.error(request, "Method not allowed")
-    return redirect('render_products')
+    return redirect('manage_products')
 
 @csrf_exempt
 def update_product(request, product_id):
-    if request.method in ["PUT", "PATCH"]:
+    if request.method in ["POST"]:  # Use POST for form-based updates
         try:
             if not ObjectId.is_valid(product_id):
-                error_message = "Invalid product ID format"
-                return JsonResponse({"error": error_message}, status=400)
+                messages.error(request, "Invalid product ID format")
+                return redirect('manage_products')
 
             product = products_collection.find_one({"_id": ObjectId(product_id)})
             if not product:
-                error_message = "Product not found"
-                return JsonResponse({"error": error_message}, status=404)
+                messages.error(request, "Product not found")
+                return redirect('render_products')
 
-            data = json.loads(request.body)
+            # For form-based update
+            data = {
+                "name": request.POST.get("name", product.get("name")),
+                "description": request.POST.get("description", product.get("description")),
+                "price": float(request.POST.get("price", product.get("price", 0))),
+                "category": request.POST.get("category", product.get("category")),
+                "tags": request.POST.getlist("tags") or product.get("tags", []),
+                "is_active": request.POST.get("is_active") == "on" if "is_active" in request.POST else product.get("is_active", True),
+                "attributes": {
+                    "brand": request.POST.get("brand", product.get("attributes", {}).get("brand")),
+                    "color": request.POST.get("color", product.get("attributes", {}).get("color")),
+                    "model": request.POST.get("model", product.get("attributes", {}).get("model")),
+                },
+                "stock": int(request.POST.get("stock", product.get("stock", 0))),
+                "seller_id": request.POST.get("seller_id", product.get("seller_id")),
+            }
+
             try:
                 validated_data = product_schema.load(data, partial=True)
             except ValidationError as err:
-                return JsonResponse({"error": err.messages}, status=400)
+                messages.error(request, f"Validation error: {err.messages}")
+                return redirect('manage_products')
 
             update_result = products_collection.update_one(
                 {"_id": ObjectId(product_id)},
@@ -207,20 +224,18 @@ def update_product(request, product_id):
             )
 
             if update_result.matched_count == 0:
-                error_message = "No matching product found to update"
-                return JsonResponse({"error": error_message}, status=500)
+                messages.error(request, "No matching product found to update")
+                return redirect('manage_products')
 
-            success_message = f"Product with ID {product_id} updated successfully"
-            return JsonResponse({"message": success_message}, status=200)
+            messages.success(request, f"Product {data['name']} updated successfully")
+            return redirect('manage_products')
 
-        except json.JSONDecodeError:
-            error_message = "Invalid JSON format"
-            return JsonResponse({"error": error_message}, status=400)
         except Exception as e:
-            error_message = str(e)
-            return JsonResponse({"error": error_message}, status=500)
+            messages.error(request, f"Error updating product: {str(e)}")
+            return redirect('manage_products')
 
-    return JsonResponse({"error": "Method not allowed"}, status=405)
+    messages.error(request, "Method not allowed")
+    return redirect('render_products')
 
 @csrf_exempt
 def submit_review(request, product_id):
