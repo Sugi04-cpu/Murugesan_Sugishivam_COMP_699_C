@@ -1,23 +1,10 @@
-from django.shortcuts import render, redirect
-from django.views.decorators.csrf import csrf_exempt
+from ..modules import  *
 from ..cart_management.cart_management_db import get_user_cart, get_cart_items
 from ..orders.order_schema import OrderSchema
-from marshmallow import ValidationError
 import stripe
-from django.conf import settings
-from django.urls import reverse
-from django.contrib import messages
-from django.core.mail import send_mail
-from django.contrib import messages
-from api.mongoDb import get_collection
-from bson import ObjectId
-import uuid
-
-from datetime import datetime, timedelta
 
 # Initialize Stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
-users_collection = get_collection("users")
 
 @csrf_exempt
 def send_verification_email(email, verification_token, user_id):
@@ -52,11 +39,13 @@ def checkout(request):
 
         user_data = getattr(request,  'user_data', None) or request.session.get('user_data') or {"user_id": user_id}
 
+        request.user_data = user_data  # Set user_data for later use
+
         if not user_data:
             messages.warning(request, "Payment was cancelled. Please log in to view your cart.")
             return redirect("login_view")
 
-        # Verify email before proceeding
+        # Verify user before proceeding
         user = users_collection.find_one({"_id": ObjectId(user_data["user_id"])})
         if not user:
             messages.error(request, "User not found")
@@ -125,6 +114,8 @@ def checkout(request):
             "user": user,
             "coupon_discount": round(coupon_discount, 2),
             "discounted_total": round(discounted_total, 2),
+            "cart_count" : len(cart_items),
+
         }
 
         return render(request, 'order_management/checkout.html', context)
@@ -289,10 +280,10 @@ def apply_coupon(request, cart_total):
         coupons_collection = get_collection("coupons")
 
         active_coupons = {
-            coupon["code"]: coupon["discount"]
+            coupon["code"]: coupon["discount_percentage"]
             for coupon in coupons_collection.find({"is_active": True})
         }
-
+        
         # Handle coupon code
         coupon_code = request.POST.get("coupon_code", "").strip().upper()
         coupon_discount = 0
@@ -309,7 +300,7 @@ def apply_coupon(request, cart_total):
                     # Handle free shipping coupon
                     messages.success(request, f"Coupon '{coupon_code}' applied successfully! Free shipping applied.")
             else:
-                messages.error(request, "Invalid coupon code.")
+                messages.error(request, "Coupon Expired or Invalid coupon code.")
         
         # Ensure discount does not exceed cart total
         coupon_discount = min(coupon_discount, cart_total)

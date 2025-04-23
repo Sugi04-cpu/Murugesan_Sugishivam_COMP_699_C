@@ -45,9 +45,12 @@
                                     <form method="post" action="{% url 'checkout' %}" class="d-flex justify-content-between">
                                         {% csrf_token %}
                                         <div class="form-group">
-                                            <input type="text" name="coupon_code" id="coupon_code" class="form-control" placeholder="Enter coupon code">
+                                            <input type="text" name="coupon_code" id="coupon_code" class="form-control" placeholder="Enter coupon code" required>
+                                            {% if coupon_error %}
+                                                <small class="text-danger">{{ coupon_error }}</small>
+                                            {% endif %}
                                         </div>
-                                        <button type="submit" class="btn btn-primary mt-2">Apply Coupon</button>
+                                        <button type="submit" class="btn btn-primary mt-2" >Apply Coupon</button>
                                     </form>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between">

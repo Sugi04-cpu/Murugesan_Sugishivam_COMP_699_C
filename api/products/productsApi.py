@@ -1,19 +1,9 @@
-from django.http import JsonResponse
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from django.views.decorators.csrf import csrf_exempt
-from marshmallow import ValidationError
+from ..modules import *
 from .schema import ProductSchema, IndividualReviewSchema
-from api.mongoDb import get_collection
-import json
-from bson import ObjectId
-from types import SimpleNamespace
-from datetime import datetime
 from ..utils.date_utils import validate_and_convert_dates
 
-# Fetch the collection dynamically
-product_collection = get_collection("products")
-reviews_collection = get_collection("reviews")
+
+# Fetch the schema
 product_schema = ProductSchema()
 review_schema = IndividualReviewSchema()
 
@@ -34,7 +24,7 @@ def get_products(request):
             order = 1 if request.GET.get("order", "asc") == "asc" else -1
 
             # Retrieve filtered/sorted products from MongoDB
-            products = list(product_collection.find(query).sort(sort_by, order))
+            products = list(products_collection.find(query).sort(sort_by, order))
 
             # Convert ObjectId to string for template usage
             for product in products:
@@ -57,17 +47,13 @@ def get_products(request):
 def get_single_product(request, id):
     try:
         # Fetch the product by its ObjectId
-        product = product_collection.find_one({"_id": ObjectId(id)})
+        product = products_collection.find_one({"_id": ObjectId(id)})
 
         if product:
             product["id"] = str(product["_id"]) 
-            product_obj = SimpleNamespace(**product)
-            
-            context = {
-                'product': product_obj,
-            }
 
-            return render(request, 'products/product_detail.html', context)
+
+            return render(request, 'products/product_detail.html', {"product": product})
         else:
             messages.error(request, "Product not found")
             return redirect('render_products')
@@ -110,11 +96,12 @@ def create_product(request):
                     validated_product = product_schema.load(product)  # Marshmallow validation
                 except ValidationError as err:
                     if request.content_type != "application/json":
-                        return render(request, "admin/create_product.html", {"error": err.messages})
+                        messages.error(request, f"Validation error: {err.messages}")
+                        return render(request, "products/create_product.html")
                     return JsonResponse({"error": err.messages}, status=400)
 
                 # Check for duplicates
-                existing_product = product_collection.find_one({
+                existing_product = products_collection.find_one({
                     "name": {"$regex": f"^{validated_product['name']}$", "$options": "i"},
                     "attributes.brand": {"$regex": f"^{validated_product['attributes']['brand']}$", "$options": "i"},
                     "attributes.color": {"$regex": f"^{validated_product['attributes']['color']}$", "$options": "i"},
@@ -124,7 +111,8 @@ def create_product(request):
                 if existing_product:
                     error_message = f"Product '{validated_product['name']}' with these attributes already exists"
                     if request.content_type != "application/json":
-                        return render(request, "admin/create_product.html", {"error": error_message})
+                        messages.error(request, error_message)
+                        return render(request, "products/create_product.html")
                     return JsonResponse({"error": error_message}, status=400)
 
                 valid_products.append(validated_product)
@@ -132,30 +120,34 @@ def create_product(request):
             if not valid_products:
                 error_message = "No valid products to insert"
                 if request.content_type != "application/json":
-                    return render(request, "admin/create_product.html", {"error": error_message})
+                    messages.error(request, error_message)
+                    return render(request, "products/create_product.html")
                 return JsonResponse({"error": error_message}, status=400)
 
-            product_collection.insert_many(valid_products)
+            products_collection.insert_many(valid_products)
 
             success_message = f"{len(valid_products)} Product(s) created successfully"
             if request.content_type != "application/json":
-                return render(request, "admin/create_product.html", {"message": success_message})
+                messages.success(request, success_message)
+                return render(request, "products/create_product.html")
             return JsonResponse({"message": success_message}, status=201)
 
         except json.JSONDecodeError:
             error_message = "Invalid JSON"
             if request.content_type != "application/json":
-                return render(request, "admin/create_product.html", {"error": error_message})
+                messages.error(request, error_message)
+                return render(request, "products/create_product.html")
             return JsonResponse({"error": error_message}, status=400)
         except Exception as e:
             error_message = str(e)
             if request.content_type != "application/json":
-                return render(request, "admin/create_product.html", {"error": error_message})
+                messages.error(request, f"Error creating product: {error_message}")
+                return render(request, "products/create_product.html")
             return JsonResponse({"error": error_message}, status=500)
 
     elif request.method == "GET":
         # Render the product creation form for GET requests
-        return render(request, "admin/create_product.html")
+        return render(request, "products/create_product.html")
 
     return JsonResponse({"error": "Method not allowed"}, status=405)
 @csrf_exempt
@@ -167,14 +159,14 @@ def delete_product(request, product_id):
                 return redirect('render_products')
 
             # Find the product by ID
-            product = product_collection.find_one({"_id": ObjectId(product_id)})
+            product = products_collection.find_one({"_id": ObjectId(product_id)})
 
             if not product:
                 messages.error(request, "Product not found")
                 return redirect('render_products')
 
             # Delete the product
-            result = product_collection.delete_one({"_id": ObjectId(product_id)})
+            result = products_collection.delete_one({"_id": ObjectId(product_id)})
 
             if result.deleted_count == 0:
                 messages.error(request, "Failed to delete product")
@@ -198,7 +190,7 @@ def update_product(request, product_id):
                 error_message = "Invalid product ID format"
                 return JsonResponse({"error": error_message}, status=400)
 
-            product = product_collection.find_one({"_id": ObjectId(product_id)})
+            product = products_collection.find_one({"_id": ObjectId(product_id)})
             if not product:
                 error_message = "Product not found"
                 return JsonResponse({"error": error_message}, status=404)
@@ -209,7 +201,7 @@ def update_product(request, product_id):
             except ValidationError as err:
                 return JsonResponse({"error": err.messages}, status=400)
 
-            update_result = product_collection.update_one(
+            update_result = products_collection.update_one(
                 {"_id": ObjectId(product_id)},
                 {"$set": validated_data}
             )
@@ -236,7 +228,7 @@ def submit_review(request, product_id):
     if request.method == "POST":
         try:
             # Check if the product exists
-            product = product_collection.find_one({"_id": ObjectId(product_id)})
+            product = products_collection.find_one({"_id": ObjectId(product_id)})
             if not product:
                 messages.error(request, "Product not found")
                 return redirect("get_single_product", id=product_id)

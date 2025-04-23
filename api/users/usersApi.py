@@ -1,17 +1,7 @@
-from django.shortcuts import redirect, render
-from django.contrib import messages
-from api.mongoDb import get_collection
+from ..modules import *
 from .userSchema import UserSchema
 from django.contrib.auth.hashers import make_password
-from datetime import datetime, timedelta
-from marshmallow import ValidationError
-from bson import ObjectId
 from ..checkout.views import send_verification_email
-import uuid
-from django.conf import settings
-
-
-users_collection = get_collection("users")
 
 
 def create_user(request):
@@ -81,22 +71,22 @@ def update_user(request, user_id):
 
             if not update_data:
                 messages.error(request, "No valid fields to update")
-                return redirect("render_products")
+                return redirect("render_users_admin")
 
             result = users_collection.update_one({"_id": ObjectId(user_id)}, {"$set": update_data})
             if result.matched_count == 0:
                 messages.error(request, "User not found")
-                return redirect("render_products")
+                return redirect("render_users_admin")
 
             messages.success(request, "User updated successfully")
-            return redirect("render_products")
+            return redirect("render_users_admin")
 
         except Exception as e:
             messages.error(request, f"Error updating user: {str(e)}")
-            return redirect("render_products")
+            return redirect("render_users_admin")
 
     messages.error(request, "Invalid request method")
-    return redirect("render_products")
+    return render(request, "error.html")
 
 
 def delete_user(request, user_id):
@@ -116,7 +106,7 @@ def delete_user(request, user_id):
             return redirect("render_products")
 
     messages.error(request, "Invalid request method")
-    return redirect("render_products")
+    return render(request, "error.html")
 
 
 def verify_email(request, token, user_id):

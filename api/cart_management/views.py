@@ -1,6 +1,4 @@
-from django.shortcuts import render, redirect
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib import messages
+from ..modules import *
 from .cart_management_db import (
     get_user_cart,
     create_cart,
@@ -8,19 +6,10 @@ from .cart_management_db import (
     get_cart_items,
     clear_cart
 )
-from django.core.mail import send_mail
-from decouple import config
-from bson import ObjectId, errors
-import json
-from marshmallow import ValidationError
-from datetime import datetime, timedelta
-from ..mongoDb import get_collection
 from .cart_schema import CartSchema
 from ..utils.date_utils import validate_and_convert_dates
 
-product_collection = get_collection("products")
-carts_collection = get_collection("carts")
-user_collection = get_collection("users")
+
 cart_schema = CartSchema()
 
 def handle_response(request, context=None, message=None, status=200, redirect_url=None):
@@ -39,8 +28,11 @@ def view_cart(request):
         cart = get_user_cart(user_id=request.user_data["user_id"]) if request.user_data else get_user_cart(session_id=request.session.session_key)
         if not cart:
             return render(request, 'order_management/cart.html', {
-                "cart_items": [], "cart_total": 0, "cart_count": 0,
-                "discount_amount": 0, "total_with_discount": 0,
+                "cart_items": [],
+                "cart_total": 0, 
+                "cart_count": 0,
+                "discount_amount": 0, 
+                "total_with_discount": 0,
                 "remaining_for_free_shipping": 50,
             })
 
@@ -48,12 +40,17 @@ def view_cart(request):
             if cart.get("expires_at"):
                 expires_at = cart["expires_at"]
                 current_time = datetime.utcnow()
+                if isinstance(expires_at, str):
+                    expires_at = datetime.fromisoformat(expires_at)
                 if current_time >= expires_at:
                     clear_cart(cart["_id"])
                     messages.warning(request, "Your cart has expired. Items have been cleared.")
                     return render(request, 'order_management/cart.html', {
-                        "cart_items": [], "cart_total": 0, "cart_count": 0,
-                        "discount_amount": 0, "total_with_discount": 0,
+                        "cart_items": [], 
+                        "cart_total": 0, 
+                        "cart_count": 0,
+                        "discount_amount": 0, 
+                        "total_with_discount": 0,
                         "remaining_for_free_shipping": 50,
                     })
                 else:
@@ -105,7 +102,7 @@ def add_to_cart(request, product_id):
         except errors.InvalidId:
             return handle_response(request, None, "Invalid product ID.", 400, "view_cart")
 
-        product = product_collection.find_one({"_id": product_object_id})
+        product = products_collection.find_one({"_id": product_object_id})
         if not product:
             return handle_response(request, None, "Product not found.", 404, "view_cart")
 
@@ -114,14 +111,19 @@ def add_to_cart(request, product_id):
 
         if request.user_data:
             user_id = request.user_data.get('user_id')
-            cart = get_user_cart(user_id=user_id) or create_cart(user_id=user_id) or get_user_cart(user_id=user_id)
+            cart = get_user_cart(user_id=user_id)
+            if not cart:
+                create_cart(user_id=user_id)
+                cart = get_user_cart(user_id=user_id)
         else:
             if not request.session.session_key:
                 request.session.create()
-            cart = get_user_cart(session_id=request.session.session_key) or create_cart(session_id=request.session.session_key) or get_user_cart(session_id=request.session.session_key)
-
+            cart = get_user_cart(session_id=request.session.session_key)
+            if not cart:
+                create_cart(session_id=request.session.session_key)
+                cart = get_user_cart(session_id=request.session.session_key)    
         if not cart:
-            raise Exception("Failed to create or retrieve cart.")
+            return handle_response(request, None, "Failed to create or retrieve cart.", 500, "view_cart")
 
         quantity = 1
         form_quantity = request.POST.get("quantity")
@@ -133,12 +135,16 @@ def add_to_cart(request, product_id):
         if quantity > product.get('stock', 0):
             return handle_response(request, None, f"Only {product.get('stock')} items available.", 400, "view_cart")
 
-        cart = validate_and_convert_dates(cart, ["created_at", "updated_at", "expires_at"])
+        validated_cart = validate_and_convert_dates(cart, ["created_at", "updated_at", "expires_at"])
 
+        if "_id" in validated_cart:
+            validated_cart["_id"] = str(validated_cart["_id"])
+
+        
         try:
-            cart_schema.load(cart)
+            cart_schema.load(validated_cart)
         except ValidationError as e:
-            return handle_response(request, None, f"Cart validation failed: {e.messages}", 400, "view_cart")
+            return handle_response(request, None, f"Cart validation failed: {e.messages}", 400, "error.html")
 
         current_cart_items = get_cart_items(cart["_id"])
         existing_item = next((item for item in current_cart_items if str(item["product"]["_id"]) == product_id), None)
@@ -151,7 +157,8 @@ def add_to_cart(request, product_id):
         return handle_response(request, None, "Item added to cart successfully.", 200, "view_cart")
 
     except Exception as e:
-        return handle_response(request, None, str(e), 500, "view_cart")
+        print(f"Error in add_to_cart: {str(e)}")
+        return handle_response(request, None, str(e), 500, "error.html")
 
 @csrf_exempt
 def update_cart(request, product_id):
@@ -173,7 +180,7 @@ def update_cart(request, product_id):
             return handle_response(request, None, "Item not found in cart", 404, "view_cart")
 
         if action == "increase":
-            product = product_collection.find_one({"_id": ObjectId(product_id)})
+            product = products_collection.find_one({"_id": ObjectId(product_id)})
             if current_item["quantity"] >= product.get("stock", 0):
                 return handle_response(request, None, "Not enough stock available", 400, "view_cart")
             
@@ -244,7 +251,7 @@ def send_cart_reminder_emails():
                 print(f"Invalid or missing user_id in cart: {cart['_id']}")
                 continue
 
-            user = user_collection.find_one({"_id": ObjectId(cart["user_id"])})
+            user = users_collection.find_one({"_id": ObjectId(cart["user_id"])})
 
             cart_items = get_cart_items(cart["_id"])
             if not cart_items:
@@ -255,7 +262,7 @@ def send_cart_reminder_emails():
             cart_details = ""
             cart_total = 0
             for item in cart_items:
-                product = product_collection.find_one({"_id": ObjectId(item["product"]["_id"])})
+                product = products_collection.find_one({"_id": ObjectId(item["product"]["_id"])})
                 if product:
                     product_name = product.get("name", "Unknown Product")
                     quantity = item.get("quantity", 0)
@@ -305,7 +312,7 @@ def notify_stock():
                 continue
 
             # Fetch the user associated with the cart
-            user = user_collection.find_one({"_id": ObjectId(cart["user_id"])})
+            user = users_collection.find_one({"_id": ObjectId(cart["user_id"])})
             if not user or not user.get("email"):
                 print(f"User not found or missing email for cart: {cart.get('_id')}")
                 continue
@@ -319,7 +326,7 @@ def notify_stock():
             # Check stock status for each product in the cart
             out_of_stock_products = []
             for item in cart_items:
-                product = product_collection.find_one({"_id": ObjectId(item["product"]["_id"])})
+                product = products_collection.find_one({"_id": ObjectId(item["product"]["_id"])})
                 if product and product.get("stock", 0) <= 0:
                     out_of_stock_products.append(product.get("name", "Unknown Product"))
 

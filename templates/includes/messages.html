@@ -2,10 +2,11 @@
     {% if messages %}
     <div class="container mt-3">
         {% for message in messages %}
-            <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'warning' %}alert-warning{% else %}alert-success{% endif %} alert-dismissible fade show" role="alert">
+            <div class="alert {% if message.tags == 'error' %}alert-danger{% elif message.tags == 'warning' %}alert-warning {%elif message.tags == 'info'%}alert-warning {% else %}alert-success{% endif %} alert-dismissible fade show" role="alert">
                 <strong>
                     {% if message.tags == 'error' %}Error!
                     {% elif message.tags == 'warning' %}Warning!
+                    {% elif message.tags == 'info'%} Information!
                     {% else %}Success!{% endif %}
                 </strong>
                 {{ message }}

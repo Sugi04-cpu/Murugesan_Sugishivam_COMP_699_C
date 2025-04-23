@@ -1,7 +1,4 @@
-import json
-from django.http import JsonResponse
-from django.shortcuts import render
-from .productsApi import product_collection
+from ..modules import render, products_collection
 from django.core.paginator import Paginator 
 from ..cart_management.cart_management_db import get_user_cart, get_cart_items
 
@@ -11,23 +8,28 @@ def render_products(request):
     try:
         # Get the search query from the request
         query = request.GET.get("query", "").strip()
+        selected_category = request.GET.get("category", "").strip()
 
-        # Get products with optional search filtering
+         # Build the base filter
+        filter_query = {}
+
+        # Add search filter
         if query:
-            # Search for products by name, category, or brand
-            products = list(product_collection.find({
-                "$or": [
-                    {"name": {"$regex": query, "$options": "i"}},
-                    {"category": {"$regex": query, "$options": "i"}},
-                    {"brand": {"$regex": query, "$options": "i"}}
-                ]
-            }))
-        else:
-            # Get all products if no search query is provided
-            products = list(product_collection.find())
+            filter_query["$or"] = [
+                {"name": {"$regex": query, "$options": "i"}},
+                {"category": {"$regex": query, "$options": "i"}},
+                {"brand": {"$regex": query, "$options": "i"}}
+            ]
+
+        # Add category filter
+        if selected_category:
+            filter_query["category"] = selected_category
+
+        # Fetch products from the database  
+        products = list(products_collection.find(filter_query))
 
         # Get categories for the dropdown menu
-        categories = list(product_collection.distinct("category"))
+        categories = list(products_collection.distinct("category"))
 
         # Process products for template
         for product in products:
@@ -72,7 +74,7 @@ def render_products(request):
         context = {
             "products": page_obj,
             "categories": categories,
-            "selected_category": request.GET.get("category"),
+            "selected_category": selected_category,
             "page_obj": page_obj,
             "is_paginated": paginator.num_pages > 1,
             "total_products": len(products),

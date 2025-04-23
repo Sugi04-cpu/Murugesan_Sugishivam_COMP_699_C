@@ -1,12 +1,13 @@
+{% extends 'base.html' %}
+
 {% block title %} Edit User {% endblock %}
 
-{% block styles %}
-{% extends 'base.html' %}
+
 
 {% block content %}
 {% include 'includes/messages.html' %}
 <div class="container mt-5">
-  <h2 class="mb-4">Edit User</h2>
+  <h2 class="text-center text-primary mb-4">Edit User</h2>
   <form method="POST" action="{% url 'update_user' user.id %}">
     {% csrf_token %}
     <!-- Simulate PUT request -->
@@ -53,7 +54,7 @@
       <div class="form-text">Leave blank to keep the current password.</div>
     </div>
 
-    <button type="submit" class="btn btn-primary">Update User</button>
+    <button type="submit" class="btn btn-primary mb-5">Update User</button>
   </form>
 </div>
 {% endblock %}

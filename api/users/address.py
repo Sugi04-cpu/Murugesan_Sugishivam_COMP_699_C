@@ -1,18 +1,9 @@
-from django.shortcuts import render, redirect
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib import messages
-from bson import ObjectId
-from marshmallow import ValidationError
+from ..modules import *
 from .userSchema import AddressSchema
-from ..mongoDb import get_collection
 
-user_collection = get_collection("users")
-address_collection = get_collection("addresses")
+schema = AddressSchema()
 
-def initialize_address_collection():
-    """Initialize address collection with required indexes."""
-    address_collection = get_collection("addresses")
-    
+def initialize_address_collection():    
     # Create compound index for user_id and address type
     # Unique constraint ensures one address type per user
     address_collection.create_index(
@@ -47,7 +38,7 @@ def add_address(request, user_id):
             }
 
             # Validate address using AddressSchema
-            schema = AddressSchema()
+            
             try:
                 validated_address = schema.load(address)
             except ValidationError as e:
@@ -55,7 +46,7 @@ def add_address(request, user_id):
                 return redirect("profile_view", user_id=user_id)
 
             # Ensure the user exists
-            user = user_collection.find_one({"_id": ObjectId(user_id)})
+            user = users_collection.find_one({"_id": ObjectId(user_id)})
             if not user:
                 messages.error(request, "User not found")
                 return redirect("profile_view", user_id=user_id)
@@ -94,7 +85,7 @@ def get_user_profile(request, user_id):
     """Retrieve user profile and associated addresses."""
     try:
         # Fetch user details excluding the password
-        user = user_collection.find_one({"_id": ObjectId(user_id)}, {"password": 0})
+        user = users_collection.find_one({"_id": ObjectId(user_id)}, {"password": 0})
         if not user:
             messages.error(request, "User not found")
             return redirect("profile_view", user_id=user_id)

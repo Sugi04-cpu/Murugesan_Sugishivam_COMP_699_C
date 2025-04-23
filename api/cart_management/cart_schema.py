@@ -1,7 +1,4 @@
-from marshmallow import Schema, fields, validates
-from bson import ObjectId
-from marshmallow.exceptions import ValidationError
-from datetime import datetime, timedelta
+from ..modules import ValidationError, ObjectId, fields, Schema, validates, datetime, timedelta
 
 # Custom ObjectId field for MongoDB validation
 class ObjectIdField(fields.Field):
@@ -18,7 +15,7 @@ class ObjectIdField(fields.Field):
 class CartSchema(Schema):
     _id = ObjectIdField(required=False)
     session_id = fields.Str(required=False)
-    user_id = ObjectIdField(required=False)
+    user_id = ObjectIdField(required=False, allow_none=True)
     items = fields.List(fields.Dict(), missing=[])
     created_at = fields.DateTime(required=False, missing=datetime.utcnow)
     updated_at = fields.DateTime(required=False, missing=datetime.utcnow)

@@ -1,7 +1,6 @@
-from marshmallow import Schema, fields, ValidationError, validates, validate
-from bson import ObjectId
-from datetime import datetime
-from api.mongoDb import get_collection
+from ..modules import Schema, fields, ValidationError, validates, validate, ObjectId
+
+
 
 
 # Custom field for ObjectId validation
@@ -24,6 +23,7 @@ ProductSchema = Schema.from_dict({
     "name": fields.Str(required=True),
     "price": fields.Float(required=True, validate=lambda x: x >= 0),  # Price must be >= 0
     "category": fields.Str(required=True),
+    "description": fields.Str(required=False),
     "stock": fields.Int(required=True, validate=lambda x: x >= 0),  # Stock must be >= 0
     "seller_id": fields.Raw(required=True, allow_none=True),
     "discount_percentage": fields.Int(required=False, default=0, validate=validate.Range(min=0, max=100)),

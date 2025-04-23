@@ -1,20 +1,8 @@
+from ..modules import *
 from django.contrib.auth.hashers import check_password, make_password
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib import messages
-import json
-from ..mongoDb import get_collection  
 import jwt
-from datetime import datetime, timedelta
-from decouple import config
-from django.shortcuts import render, redirect
-from django.urls import reverse
-from django.core.mail import send_mail
-from django.utils.timezone import now
-import uuid
 from django.utils.timezone import make_aware, now
 
-user_collection = get_collection("users")
 
 def is_json_request(request):
     return request.content_type == 'application/json'
@@ -32,7 +20,7 @@ def login_view(request):
                 return render(request, 'login/login.html')
 
             # Fetch user from the database
-            user = user_collection.find_one({"email": email})
+            user = users_collection.find_one({"email": email})
             print(user)
             if not user:
                 messages.error(request, "Invalid credentials")
@@ -50,7 +38,7 @@ def login_view(request):
                     recipient_list=[email],
                     fail_silently=False,
                 )
-                user_collection.update_one(
+                users_collection.update_one(
                     {"_id": user["_id"]},
                     {"$set": {"reset_token": reset_token, "reset_token_expires": now() + timedelta(hours=1)}}
                 )
@@ -61,7 +49,7 @@ def login_view(request):
             stored_hashed_password = user.get("password")
             if not check_password(password, stored_hashed_password):
                 # Increment failed attempts
-                user_collection.update_one(
+                users_collection.update_one(
                     {"_id": user["_id"]},
                     {"$inc": {"failed_attempts": 1}, "$set": {"last_failed_attempt": now()}}
                 )
@@ -69,7 +57,7 @@ def login_view(request):
                 return render(request, 'login/login.html')
 
             # Reset failed attempts on successful login
-            user_collection.update_one({"_id": user["_id"]}, {"$set": {"failed_attempts": 0}})
+            users_collection.update_one({"_id": user["_id"]}, {"$set": {"failed_attempts": 0}})
 
             # Create JWT payload
             payload = {
@@ -127,7 +115,7 @@ def password_reset(request, reset_token):
             new_password = request.POST.get("new_password")
 
             # Find user by reset token
-            user = user_collection.find_one({"reset_token": reset_token})
+            user = users_collection.find_one({"reset_token": reset_token})
             if not user:
                 messages.error(request, "Invalid or expired reset token.")
                 return redirect("login_view")
@@ -146,7 +134,7 @@ def password_reset(request, reset_token):
             new_password = make_password(new_password)
 
             # Update the user's password
-            user_collection.update_one(
+            users_collection.update_one(
                 {"_id": user["_id"]},
                 {"$set": {"password": new_password, 
                           "reset_token": None, 

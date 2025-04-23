@@ -1,10 +1,4 @@
-from django.shortcuts import render, redirect
-from django.views.decorators.csrf import csrf_exempt
-from django.contrib import messages
-from django.contrib import messages
-from api.mongoDb import get_collection
-from bson import ObjectId
-from datetime import datetime, timedelta
+from ..modules import *
 from .order_schema import RefundRequestSchema
 from marshmallow import ValidationError
 from ..utils.date_utils import validate_and_convert_dates
@@ -19,8 +13,6 @@ def my_orders(request):
             return redirect('login/login_view')
 
         # Fetch orders for the user
-        orders_collection = get_collection("orders")
-        products_collection = get_collection("products")
         orders = list(orders_collection.find({"user_id": ObjectId(user_data["user_id"])}))
 
         for order in orders:

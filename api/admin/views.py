@@ -1,14 +1,4 @@
-from django.shortcuts import render, redirect
-from datetime import datetime
-from ..mongoDb import get_collection
-from django.contrib import messages
-from bson import ObjectId
-
-users_collection = get_collection("users")
-coupons_collection = get_collection("coupons")
-refund_requests_collection = get_collection("refund_requests")
-reviews_collection = get_collection("reviews")
-products_collection = get_collection("products")
+from ..modules import *
 
 def render_users_admin(request):
     """Render the admin user management page."""

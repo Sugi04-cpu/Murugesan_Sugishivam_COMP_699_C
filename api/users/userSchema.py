@@ -1,5 +1,4 @@
-from marshmallow import Schema, fields, validates, ValidationError
-from bson import ObjectId
+from ..modules import validate, ObjectId, fields, Schema, validates, ValidationError
 
 # Custom ObjectId field for MongoDB validation
 class ObjectIdField(fields.Field):
